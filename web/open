@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+
+chromium `stack path --local-install-root`/bin/csgo-guides-web.jsexe/index.html
