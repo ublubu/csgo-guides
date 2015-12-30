@@ -67,6 +67,9 @@ executable csgo-guides-web
                      , safe
                      , bytestring
                      , text
+                     , csgo-guides-parsing
+                     , parsec
+                     , either
   
   -- Directories containing source files.
   hs-source-dirs:      src

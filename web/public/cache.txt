@@ -1,0 +1,12 @@
+http://i.imgur.com/BXtCRxZ.jpg
+molly vents from long A
+[molotov,vent,long a]
+
+http://i.imgur.com/D1nhbTH.jpg
+smoke and flash from squeaky
+[smoke,flash,squeaky,quad,fence,A]
+
+public/cache/cache_ct_boost_nade.jpg
+nade boost from highway box
+[nade,highway,boost,ct,mid]
+
