@@ -71,6 +71,9 @@ displayFlex = display "flex"
 displayInlineFlex :: StyleMap
 displayInlineFlex = display "inline-flex"
 
+displayInlineBlock :: StyleMap
+displayInlineBlock = display "inline-block"
+
 alignItems :: String -> StyleMap
 alignItems a = "align-items" =: a
 
