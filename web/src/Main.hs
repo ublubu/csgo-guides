@@ -119,13 +119,15 @@ toTagSet tag checked = if checked then Set.singleton tag else Set.empty
 
 nadeTagSelector :: (MonadWidget t m) => Set.Set String -> m (Dynamic t (Set.Set String))
 nadeTagSelector tags =
-  elAttr "div" (toAttr $ "padding-top" =: "0.1em") $ do
-    allCb <- nadeTagCheckbox True allTag
+  elAttr "div" (toAttr $ "padding-top" =: "0.1em") $ mdo
+    checkedTagsChange <- holdDyn True . fmap (const False) $ updated checkedTags
+    allCb <- dynWidgetDyn' True g checkedTagsChange
     tagCbs <- mapM f (Set.toList tags) -- [(String, Checkbox t)]
     tagCbVals <- mapM toTagSetDyn tagCbs -- [Dynamic t (Set String)]
     checkedTags <- mconcatDyn tagCbVals
-    combineDyn useAllTag (_checkbox_value allCb) checkedTags
+    combineDyn useAllTag allCb checkedTags
   where f tag = fmap (\r -> (tag, r)) $ nadeTagCheckbox False tag
+        g val = fmap _checkbox_value $ nadeTagCheckbox val allTag
         useAllTag allChecked tagsChecked = if allChecked then tags else tagsChecked
 
 overlay :: (MonadWidget t m) => m a -> m a
@@ -144,6 +146,11 @@ nadeOverlayWidget imgClicks = mdo
   return ()
   where maybeOverlay = maybe (return never) (overlay . nadeFullscreen)
 
+dynWidgetDyn :: (MonadWidget t m) => a -> Dynamic t (m (Dynamic t a)) -> m (Dynamic t a)
+dynWidgetDyn val = fmap joinDyn . (holdDyn (constDyn val) =<<) . dyn
+
+dynWidgetDyn' :: (MonadWidget t m) => b -> (a -> m (Dynamic t b)) -> Dynamic t a -> m (Dynamic t b)
+dynWidgetDyn' val f state = dynWidgetDyn val =<< mapDyn f state
 
 dynWidgetEvents :: (MonadWidget t m) => Dynamic t (m (Event t a)) -> m (Event t a)
 dynWidgetEvents = fmap switchPromptlyDyn . (holdDyn never =<<) . dyn
