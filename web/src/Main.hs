@@ -34,8 +34,15 @@ noContents = return ()
 
 appWidget :: (MonadWidget t m) => m ()
 appWidget = do
-  bld <- getPostBuild
-  nades_ <- getNadeInfos (tag (constant "public/cache.txt") bld)
+  text "map name: "
+  srcText <- textInput
+             def{ _textInputConfig_initialValue = "e.g. dust2"
+                , _textInputConfig_attributes = constDyn ("onClick" =: "this.select()"
+                                                          <> (toAttr $ S.width 100
+                                                              <> S.displayInlineBlock))
+                }
+  let src = _textInput_value srcText
+  nades_ <- getNadeInfos . fmap getMapAddress . updated $ src
   nades <- holdDyn [] nades_
   allTags <- mapDyn (mconcat . fmap (Set.fromList . _nadeTags)) nades
   checkedTags' <- dyn =<< mapDyn nadeTagSelector allTags
@@ -45,6 +52,9 @@ appWidget = do
   nadeImgClicks <- eventJoin =<< (fmap (fmap leftmost) . dyn $ nadeWidgets)
   performEvent_ $ fmap (\img -> liftIO $ print img) nadeImgClicks
   nadeOverlayWidget nadeImgClicks
+
+getMapAddress :: String -> String
+getMapAddress map = "public/" ++ map ++ ".txt"
 
 filterByTag :: Set.Set String -> [NadeInfo] -> [NadeInfo]
 filterByTag tags = filter $ nadeTagsIn tags
