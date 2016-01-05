@@ -1,3 +1,4 @@
 #!/usr/bin/env bash
 
+./copy-public
 node_modules/.bin/static `stack path --local-install-root`/bin/csgo-guides-web.jsexe/

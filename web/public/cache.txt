@@ -1,12 +1,14 @@
-http://i.imgur.com/BXtCRxZ.jpg
+#http://i.imgur.com/BXtCRxZ.jpg
 molly vents from long A
 [molotov,vent,long a]
 
-http://i.imgur.com/D1nhbTH.jpg
+#http://i.imgur.com/D1nhbTH.jpg
 smoke and flash from squeaky
 [smoke,flash,squeaky,quad,fence,A]
 
-public/cache/cache_ct_boost_nade.jpg
+#public/cache/cache_ct_boost_nade.jpg
+#public/cache/cache_t_a_main_flash.jpg
+#public/cache/cache_tree_smoke.jpg
 nade boost from highway box
-[nade,highway,boost,ct,mid]
+[nade,highway,boost,ct,mid,essential]
 

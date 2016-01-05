@@ -30,13 +30,19 @@ minHeight' :: String -> StyleMap
 minHeight' h = "min-height" =: h
 
 posRel :: StyleMap
-posRel = "position" =: "relative"
+posRel = pos "relative"
 
 borderBox :: StyleMap
 borderBox = "box-sizing" =: "border-box"
 
 posAbs :: StyleMap
-posAbs = "position" =: "absolute"
+posAbs = pos "absolute"
+
+pos :: String -> StyleMap
+pos p = "position" =: p
+
+posFix :: StyleMap
+posFix = pos "fixed"
 
 left :: Int -> StyleMap
 left x = left' $ px x

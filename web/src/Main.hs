@@ -14,6 +14,7 @@ import Data.Either.Combinators (rightToMaybe)
 import Data.Monoid
 import qualified Data.ByteString.Char8 as BS
 import Control.Monad
+import Control.Monad.IO.Class
 import CsgoGuideParser (nadeInfos, NadeInfo(..))
 import Style
 import qualified Styles as S
@@ -28,6 +29,9 @@ css = BS.pack . toCssString $ body <> html
   where body = "body" =: (S.fullWindow <> S.noMargin)
         html = "html" =: S.fullWindow
 
+noContents :: (MonadWidget t m) => m ()
+noContents = return ()
+
 appWidget :: (MonadWidget t m) => m ()
 appWidget = do
   bld <- getPostBuild
@@ -37,8 +41,10 @@ appWidget = do
   checkedTags' <- dyn =<< mapDyn nadeTagSelector allTags
   checkedTags <- fmap joinDyn $ holdDyn (constDyn Set.empty) checkedTags'
   selectedNades <- combineDyn filterByTag checkedTags nades
-  nadeWidgets <- mapDyn (mapM_ nadeInfoWidget) selectedNades
-  void . dyn $ nadeWidgets
+  nadeWidgets <- mapDyn (mapM nadeInfoWidget) selectedNades
+  nadeImgClicks <- eventJoin =<< (fmap (fmap leftmost) . dyn $ nadeWidgets)
+  performEvent_ $ fmap (\img -> liftIO $ print img) nadeImgClicks
+  nadeOverlayWidget nadeImgClicks
 
 filterByTag :: Set.Set String -> [NadeInfo] -> [NadeInfo]
 filterByTag tags = filter $ nadeTagsIn tags
@@ -58,13 +64,30 @@ getNadeInfos address = do
   let nades = fmap (runParser nadeInfos () "" . unpack) contents
   return $ fmapMaybe rightToMaybe nades
 
-nadeInfoWidget :: (MonadWidget t m) => NadeInfo -> m ()
-nadeInfoWidget (NadeInfo img desc tags) = do
+nadeThumb :: (MonadWidget t m) => String -> m (Event t String)
+nadeThumb src = do
+  (elem, _) <- elAttr' "img" ("src" =: src <> toAttr (S.width' "25%")) noContents
+  return . fmap (const src) $ domEvent Click elem
+
+nadeFullscreen :: (MonadWidget t m) => String -> m (Event t ())
+nadeFullscreen src = do
+  (elem, _) <- elAttr' "div" (toAttr $ "background-image" =: ("url(" ++ src ++ ")")
+                             <> "background-repeat" =: "no-repeat"
+                             <> "background-size" =: "contain"
+                             <> "background-position" =: "center"
+                             <> S.width' "100vw"
+                             <> S.height' "100vh"
+                             ) noContents
+  return $ domEvent Click elem
+
+nadeInfoWidget :: (MonadWidget t m) => NadeInfo -> m (Event t String)
+nadeInfoWidget (NadeInfo imgs desc tags) = do
   elAttr "div" (toAttr $ "border-top" =: "2px solid black") $ do
-    elAttr "img" ("src" =: img <> toAttr S.fullWidth) (return ())
-    elAttr "div" (toAttr $ "font-size" =: "2em"
+    imgClicks <- mapM nadeThumb imgs
+    elAttr "div" (toAttr $ "font-size" =: "1.5em"
                  <> "padding" =: "0.25em 0.5em 1.5em 0.5em"
                  ) $ text desc
+    return . leftmost $ imgClicks
 
 nadeTagCheckbox :: (MonadWidget t m) => Bool -> String -> m (Checkbox t)
 nadeTagCheckbox startChecked tag =
@@ -94,3 +117,29 @@ nadeTagSelector tags =
     combineDyn useAllTag (_checkbox_value allCb) checkedTags
   where f tag = fmap (\r -> (tag, r)) $ nadeTagCheckbox False tag
         useAllTag allChecked tagsChecked = if allChecked then tags else tagsChecked
+
+overlay :: (MonadWidget t m) => m a -> m a
+overlay contents =
+  elAttr "div" (toAttr $ S.displayFlex
+               <> S.fullWindow
+               <> S.justifyContent "center"
+               <> S.alignItems "center"
+               <> S.posFix
+               <> S.top 0) contents
+
+nadeOverlayWidget :: (MonadWidget t m) => Event t String -> m ()
+nadeOverlayWidget imgClicks = mdo
+  imgDyn <- holdDyn Nothing (leftmost [fmap Just imgClicks, fmap (const Nothing) overlayClicks])
+  overlayClicks <- dynWidgetEvents' maybeOverlay imgDyn
+  return ()
+  where maybeOverlay = maybe (return never) (overlay . nadeFullscreen)
+
+
+dynWidgetEvents :: (MonadWidget t m) => Dynamic t (m (Event t a)) -> m (Event t a)
+dynWidgetEvents = fmap switchPromptlyDyn . (holdDyn never =<<) . dyn
+
+dynWidgetEvents' :: (MonadWidget t m) => (a -> m (Event t b)) -> Dynamic t a -> m (Event t b)
+dynWidgetEvents' f state = dynWidgetEvents =<< mapDyn f state
+
+eventJoin :: (MonadWidget t m) => Event t (Event t a) -> m (Event t a)
+eventJoin = (return . switchPromptlyDyn) <=< holdDyn never
