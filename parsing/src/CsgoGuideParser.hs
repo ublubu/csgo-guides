@@ -8,7 +8,8 @@ import Control.Monad
 
 sampleString :: String
 sampleString =
-  unlines [ "http://i.imgur.com/BXtCRxZ.jpg"
+  unlines [ "#http://i.imgur.com/BXtCRxZ.jpg"
+          , "#public/cache/cache_ct_boost_nade.jpg"
           , "molly vents from long A"
           , "[molotov,vent,long a]"
           , ""
@@ -20,7 +21,7 @@ sampleString =
 sampleTags :: String
 sampleTags = "[molotov,vent,long a]"
 
-data NadeInfo = NadeInfo { _nadeImg :: String
+data NadeInfo = NadeInfo { _nadeImg :: [String]
                          , _nadeDescription :: String
                          , _nadeTags :: [String]
                          } deriving (Show, Eq)
@@ -29,11 +30,11 @@ parseLine :: Parser String
 parseLine = manyTill anyChar (try endOfLine)
 
 parseImg :: Parser String
-parseImg = parseLine
+parseImg = char '#' *> parseLine
 
 nadeInfo :: Parser NadeInfo
 nadeInfo = do
-  img <- parseImg
+  img <- many1 parseImg
   (ds, ts) <- manyTill' parseLine (try $ parseTags <* endOfLine)
   return $ NadeInfo img (unlines ds) ts
 
