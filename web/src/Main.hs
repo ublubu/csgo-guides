@@ -101,7 +101,7 @@ nadeInfoWidget (NadeInfo imgs desc tags) = do
 
 nadeTagCheckbox :: (MonadWidget t m) => Bool -> String -> m (Checkbox t)
 nadeTagCheckbox startChecked tag =
-  elAttr "div" (toAttr $ S.displayInlineBlock) $ do
+  elAttr "label" (toAttr $ S.displayInlineBlock) $ do
     cb <- checkbox startChecked def{_checkboxConfig_attributes =
                                     constDyn . toAttr $ "vertical-align" =: "middle"
                                    }
