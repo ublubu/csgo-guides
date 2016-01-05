@@ -57,10 +57,13 @@ getMapAddress :: String -> String
 getMapAddress map = "public/" ++ map ++ ".txt"
 
 filterByTag :: Set.Set String -> [NadeInfo] -> [NadeInfo]
-filterByTag tags = filter $ nadeTagsIn tags
+filterByTag tags = filter $ hasAllTags tags
 
 nadeTagsIn :: Set.Set String -> NadeInfo -> Bool
 nadeTagsIn tags = any (`Set.member` tags) . _nadeTags
+
+hasAllTags :: Set.Set String -> NadeInfo -> Bool
+hasAllTags tags nade = all (`elem` _nadeTags nade) tags
 
 getResource :: (MonadWidget t m) => Event t String -> m (Event t Text)
 getResource address = do
@@ -99,8 +102,8 @@ nadeInfoWidget (NadeInfo imgs desc tags) = do
                  ) $ text desc
     return . leftmost $ imgClicks
 
-nadeTagCheckbox :: (MonadWidget t m) => Bool -> String -> m (Checkbox t)
-nadeTagCheckbox startChecked tag =
+nadeTagCheckbox :: (MonadWidget t m) => String -> Bool -> m (Checkbox t)
+nadeTagCheckbox tag startChecked =
   elAttr "label" (toAttr $ S.displayInlineBlock) $ do
     cb <- checkbox startChecked def{_checkboxConfig_attributes =
                                     constDyn . toAttr $ "vertical-align" =: "middle"
@@ -108,27 +111,26 @@ nadeTagCheckbox startChecked tag =
     text tag
     return cb
 
-allTag :: String
-allTag = "all"
-
-toTagSetDyn :: (MonadWidget t m) => (String, Checkbox t) -> m (Dynamic t (Set.Set String))
-toTagSetDyn (tag, cb) = mapDyn (toTagSet tag) $ _checkbox_value cb
+toTagSetDyn :: (MonadWidget t m) => (String, Dynamic t Bool) -> m (Dynamic t (Set.Set String))
+toTagSetDyn (tag, checked) = mapDyn (toTagSet tag) checked
 
 toTagSet :: String -> Bool -> Set.Set String
 toTagSet tag checked = if checked then Set.singleton tag else Set.empty
 
+renderTagSelector :: (MonadWidget t m) => Dynamic t Bool -> String -> m (String, Dynamic t Bool)
+renderTagSelector startChecked tag = fmap (\r -> (tag, r)) $ renderTagSelector' False startChecked tag
+
+renderTagSelector' :: (MonadWidget t m) => Bool -> Dynamic t Bool -> String -> m (Dynamic t Bool)
+renderTagSelector' initStartChecked startChecked tag = dynWidgetDyn' False (fmap _checkbox_value . nadeTagCheckbox tag) startChecked
+
 nadeTagSelector :: (MonadWidget t m) => Set.Set String -> m (Dynamic t (Set.Set String))
 nadeTagSelector tags =
-  elAttr "div" (toAttr $ "padding-top" =: "0.1em") $ mdo
-    checkedTagsChange <- holdDyn True . fmap (const False) $ updated checkedTags
-    allCb <- dynWidgetDyn' True g checkedTagsChange
-    tagCbs <- mapM f (Set.toList tags) -- [(String, Checkbox t)]
+  elAttr "div" (toAttr $ "padding-top" =: "0.1em") $ do
+    clearFilters <- button "clear filters"
+    initTagCbVals <- holdDyn False $ fmap (const False) clearFilters
+    tagCbs <- mapM (renderTagSelector initTagCbVals) (Set.toList tags) -- [(String, Dynamic t (Checkbox t))]
     tagCbVals <- mapM toTagSetDyn tagCbs -- [Dynamic t (Set String)]
-    checkedTags <- mconcatDyn tagCbVals
-    combineDyn useAllTag allCb checkedTags
-  where f tag = fmap (\r -> (tag, r)) $ nadeTagCheckbox False tag
-        g val = fmap _checkbox_value $ nadeTagCheckbox val allTag
-        useAllTag allChecked tagsChecked = if allChecked then tags else tagsChecked
+    mconcatDyn tagCbVals
 
 overlay :: (MonadWidget t m) => m a -> m a
 overlay contents =
