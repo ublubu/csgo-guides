@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 
 rm -rf `stack path --local-install-root`/bin/csgo-guides-web.jsexe/public/
-cp -a `stack path --local-install-root`/bin/csgo-guides-web.jsexe/* ../../ublubu.github.io/nade-guides/
+cp -a `stack path --local-install-root`/bin/csgo-guides-web.jsexe/* ../../ublubu.github.io/nades/
