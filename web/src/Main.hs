@@ -97,8 +97,8 @@ nadeInfoWidget :: (MonadWidget t m) => NadeInfo -> m (Event t String)
 nadeInfoWidget (NadeInfo imgs desc tags) = do
   elAttr "div" (toAttr $ "border-top" =: "2px solid black") $ do
     imgClicks <- mapM nadeThumb imgs
-    elAttr "div" (toAttr $ "font-size" =: "1.5em"
-                 <> "padding" =: "0.25em 0.5em 1.5em 0.5em"
+    elAttr "div" (toAttr $ "font-size" =: "1em"
+                 <> "padding" =: "0 0.5em 0.7em 0.5em"
                  ) $ text desc
     return . leftmost $ imgClicks
 
