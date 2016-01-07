@@ -62,7 +62,10 @@ library
   -- Other library packages from which modules are imported.
   build-depends:       aeson
                      , base >=4.8 && <4.9
+                     , bytestring
+                     , clientsession
                      , either
+                     , jwt
                      , lens
                      , monad-logger
                      , mtl
@@ -73,6 +76,7 @@ library
                      , servant-server
                      , text
                      , time
+                     , transformers
                      , wai
                      , wai-extra
                      , warp
@@ -100,7 +104,10 @@ executable tile-rider-server
   build-depends:       csgo-guides-server
                      , aeson
                      , base >=4.8 && <4.9
+                     , bytestring
+                     , clientsession
                      , either
+                     , jwt
                      , lens
                      , monad-logger
                      , mtl
@@ -111,6 +118,7 @@ executable tile-rider-server
                      , servant-server
                      , text
                      , time
+                     , transformers
                      , wai
                      , wai-extra
                      , warp

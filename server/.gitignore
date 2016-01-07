@@ -19,3 +19,5 @@ cabal.sandbox.config
 *.hp
 dev.db
 shell.nix
+clientsecret.txt
+clientid.txt

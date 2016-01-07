@@ -1,53 +1,78 @@
-{-# LANGUAGE DataKinds     #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies  #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+
 module Main where
 
+import Control.Monad.Trans (lift)
+import Control.Monad.Trans.Either
+import Control.Monad.Except
+import Control.Monad.Reader
+import Control.Monad.IO.Class (liftIO, MonadIO)
 import Data.Aeson
-import Data.Time.Calendar
+import Data.Either.Combinators (mapLeft)
+import Data.List
+import Data.Maybe
+import Data.Monoid
+import Data.Text (Text, pack, unpack)
+import Data.Text.Lazy (fromStrict)
+import Data.Text.Lazy.Encoding (encodeUtf8, decodeUtf8)
+import Data.ByteString.Lazy (ByteString)
 import GHC.Generics
 import Network.Wai
-import Network.Wai.Handler.Warp
+import Network.Wai.Handler.Warp (run)
 import Servant
+import Servant.Server
 
-data User = User
-  { name :: String
-  , age :: Int
-  , email :: String
-  , registration_date :: Day
-  } deriving (Eq, Show, Generic)
+data AppConfig = AppConfig
+data AppError = Invalid Text | WrappedServantErr ServantErr
+newtype App a = App { runApp :: ReaderT AppConfig (ExceptT AppError IO) a
+                    } deriving ( Monad
+                               , Functor
+                               , Applicative
+                               , MonadReader AppConfig
+                               , MonadError AppError
+                               , MonadIO)
 
--- orphan ToJSON instance for Day. necessary to derive one for User
-instance ToJSON Day where
-  -- display a day in YYYY-mm-dd format
-  toJSON d = toJSON (showGregorian d)
+type ReaderAPI = "tokensignin" :> QueryParam "idtoken" String :> Get '[JSON] String
+type StaticAPI = Raw
+type API = ReaderAPI :<|> StaticAPI
 
-instance ToJSON User
+api :: Proxy API
+api = Proxy
 
-type UserAPI = "users" :> Get '[JSON] [User]
-               :<|> "albert" :> Get '[JSON] User
-               :<|> "isaac" :> Get '[JSON] User
+readerServer :: ServerT ReaderAPI App
+readerServer =
+  tokensignin
 
-isaac :: User
-isaac = User "Isaac Newton"    372 "isaac@newton.co.uk" (fromGregorian 1683  3 1)
+  where tokensignin :: Maybe String -> App String
+        tokensignin =
+          maybe (throwError $ Invalid "missing token in queryparams") return
 
-albert :: User
-albert = User "Albert Einstein" 136 "ae@mc2.org"         (fromGregorian 1905 12 1)
+fromAppT :: EitherT ServantErr IO a -> App a
+fromAppT action = do
+  res <- liftIO $ runEitherT action
+  App . ReaderT . const . ExceptT . return $ mapLeft WrappedServantErr res
 
-users :: [User]
-users = [isaac, albert]
+runAppT :: AppConfig -> App a -> EitherT ServantErr IO a
+runAppT config action = do
+  res <- liftIO $ runExceptT $ runReaderT (runApp action) config
+  EitherT $ return $ case res of
+    Left (Invalid text) -> Left err400 { errBody = textToBSL text }
+    Left (WrappedServantErr e) -> Left e
+    Right a -> Right a
 
-userAPI :: Proxy UserAPI
-userAPI = Proxy
+textToBSL :: Text -> ByteString
+textToBSL = encodeUtf8 . fromStrict
 
-server :: Server UserAPI
-server = return users
-         :<|> return albert
-         :<|> return isaac
+server' :: AppConfig -> Server API
+server' config = enter (Nat $ runAppT config) readerServer :<|> serveDirectory "static"
 
 app :: Application
-app = serve userAPI server
+app = serve api $ server' AppConfig
 
 main :: IO ()
 main = run 8081 app
