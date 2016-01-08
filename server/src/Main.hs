@@ -22,12 +22,13 @@ import Data.Text.Lazy (fromStrict)
 import Data.Text.Lazy.Encoding (encodeUtf8, decodeUtf8)
 import Data.ByteString.Lazy (ByteString)
 import GHC.Generics
+import Network.HTTP.Client.Conduit (Manager, withManager, HasHttpManager(..), newManager)
 import Network.Wai
 import Network.Wai.Handler.Warp (run)
 import Servant
 import Servant.Server
 
-data AppConfig = AppConfig
+data AppConfig = AppConfig { _appConfigHttpManager :: Manager }
 data AppError = Invalid Text | WrappedServantErr ServantErr
 newtype App a = App { runApp :: ReaderT AppConfig (ExceptT AppError IO) a
                     } deriving ( Monad
@@ -36,6 +37,12 @@ newtype App a = App { runApp :: ReaderT AppConfig (ExceptT AppError IO) a
                                , MonadReader AppConfig
                                , MonadError AppError
                                , MonadIO)
+
+instance HasHttpManager AppConfig where
+  getHttpManager = _appConfigHttpManager
+
+--askConfig :: App AppConfig
+--askConfig = App . ReaderT . const $ ask
 
 type ReaderAPI = "tokensignin" :> QueryParam "idtoken" String :> Get '[JSON] String
 type StaticAPI = Raw
@@ -52,14 +59,10 @@ readerServer =
         tokensignin =
           maybe (throwError $ Invalid "missing token in queryparams") return
 
-fromAppT :: EitherT ServantErr IO a -> App a
-fromAppT action = do
-  res <- liftIO $ runEitherT action
-  App . ReaderT . const . ExceptT . return $ mapLeft WrappedServantErr res
-
-runAppT :: AppConfig -> App a -> EitherT ServantErr IO a
-runAppT config action = do
-  res <- liftIO $ runExceptT $ runReaderT (runApp action) config
+runAppT :: App a -> EitherT ServantErr IO a
+runAppT action = do
+  config <- defaultAppConfig
+  res <- liftIO . runExceptT . flip runReaderT config . runApp $ action
   EitherT $ return $ case res of
     Left (Invalid text) -> Left err400 { errBody = textToBSL text }
     Left (WrappedServantErr e) -> Left e
@@ -68,11 +71,14 @@ runAppT config action = do
 textToBSL :: Text -> ByteString
 textToBSL = encodeUtf8 . fromStrict
 
-server' :: AppConfig -> Server API
-server' config = enter (Nat $ runAppT config) readerServer :<|> serveDirectory "static"
+defaultAppConfig :: (MonadIO m) => m AppConfig
+defaultAppConfig = fmap AppConfig newManager
+
+server' :: Server API
+server' = enter (Nat runAppT) readerServer :<|> serveDirectory "static"
 
 app :: Application
-app = serve api $ server' AppConfig
+app = serve api $ server'
 
 main :: IO ()
 main = run 8081 app

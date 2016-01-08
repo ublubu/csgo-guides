@@ -64,7 +64,9 @@ library
                      , base >=4.8 && <4.9
                      , bytestring
                      , clientsession
+                     , conduit
                      , either
+                     , http-conduit
                      , jwt
                      , lens
                      , monad-logger
@@ -72,6 +74,7 @@ library
                      , persistent
                      , persistent-sqlite
                      , persistent-template
+                     , resourcet
                      , servant
                      , servant-server
                      , text
@@ -106,7 +109,9 @@ executable tile-rider-server
                      , base >=4.8 && <4.9
                      , bytestring
                      , clientsession
+                     , conduit
                      , either
+                     , http-conduit
                      , jwt
                      , lens
                      , monad-logger
@@ -114,6 +119,7 @@ executable tile-rider-server
                      , persistent
                      , persistent-sqlite
                      , persistent-template
+                     , resourcet
                      , servant
                      , servant-server
                      , text
