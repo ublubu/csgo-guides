@@ -30,19 +30,10 @@ import Servant.Server
 
 data AppConfig = AppConfig { _appConfigHttpManager :: Manager }
 data AppError = Invalid Text | WrappedServantErr ServantErr
-newtype App a = App { runApp :: ReaderT AppConfig (ExceptT AppError IO) a
-                    } deriving ( Monad
-                               , Functor
-                               , Applicative
-                               , MonadReader AppConfig
-                               , MonadError AppError
-                               , MonadIO)
+type App = ReaderT AppConfig (ExceptT AppError IO)
 
 instance HasHttpManager AppConfig where
   getHttpManager = _appConfigHttpManager
-
---askConfig :: App AppConfig
---askConfig = App . ReaderT . const $ ask
 
 type ReaderAPI = "tokensignin" :> QueryParam "idtoken" String :> Get '[JSON] String
 type StaticAPI = Raw
@@ -62,7 +53,7 @@ readerServer =
 runAppT :: App a -> EitherT ServantErr IO a
 runAppT action = do
   config <- defaultAppConfig
-  res <- liftIO . runExceptT . flip runReaderT config . runApp $ action
+  res <- liftIO . runExceptT . flip runReaderT config $ action
   EitherT $ return $ case res of
     Left (Invalid text) -> Left err400 { errBody = textToBSL text }
     Left (WrappedServantErr e) -> Left e
