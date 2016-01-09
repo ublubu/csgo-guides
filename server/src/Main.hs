@@ -13,6 +13,8 @@ import Control.Monad.Except
 import Control.Monad.Reader
 import Control.Monad.IO.Class (liftIO, MonadIO)
 import Data.Aeson
+import Data.Conduit
+import qualified Data.Conduit.List as C
 import Data.Either.Combinators (mapLeft)
 import Data.List
 import Data.Maybe
@@ -20,9 +22,11 @@ import Data.Monoid
 import Data.Text (Text, pack, unpack)
 import Data.Text.Lazy (fromStrict)
 import Data.Text.Lazy.Encoding (encodeUtf8, decodeUtf8)
+import qualified Data.ByteString.Char8 as BS
 import Data.ByteString.Lazy (ByteString)
 import GHC.Generics
-import Network.HTTP.Client.Conduit (Manager, withManager, HasHttpManager(..), newManager)
+import Network.HTTP.Client.Conduit (Manager, withManager, HasHttpManager(..), newManager, withResponse, Response)
+import qualified Network.HTTP.Client.Conduit as H
 import Network.Wai
 import Network.Wai.Handler.Warp (run)
 import Servant
@@ -47,8 +51,18 @@ readerServer =
   tokensignin
 
   where tokensignin :: Maybe String -> App String
-        tokensignin =
-          maybe (throwError $ Invalid "missing token in queryparams") return
+        tokensignin token = case token of
+          Nothing -> throwError $ Invalid "missing token in queryparams"
+          Just t -> askGoogle t
+
+askGoogle :: String -> App String
+askGoogle token = do
+  request <- liftIO $ H.parseUrl "https://www.googleapis.com/oauth2/v3/tokeninfo"
+  let r = H.setQueryString [("id_token", Just $ BS.pack token)] request
+  withResponse r processGoogleResponse
+
+processGoogleResponse :: H.Response (ConduitM i BS.ByteString App ()) -> App String
+processGoogleResponse = return . show . H.responseStatus
 
 runAppT :: App a -> EitherT ServantErr IO a
 runAppT action = do
