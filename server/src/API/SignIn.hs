@@ -9,7 +9,7 @@ module API.SignIn where
 import Control.Monad
 import Data.Aeson
 import Data.Text (Text)
-import Servant
+import Servant.API
 
 data CookieData = CookieData { _cookieDataUserId :: Text } deriving (Show, Eq)
 
