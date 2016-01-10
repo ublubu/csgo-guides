@@ -46,8 +46,8 @@ type App = ReaderT AppConfig (ExceptT AppError IO)
 instance HasHttpManager AppConfig where
   getHttpManager = _appConfigHttpManager
 
-type SetCookied a = Headers '[Header "Set-Cookie" String] a
-type ReaderAPI = "tokensignin" :> QueryParam "idtoken" String :> Get '[JSON] (SetCookied String)
+type SetCookied a = Headers '[Header "Set-Cookie" Text] a
+type ReaderAPI = "tokensignin" :> QueryParam "idtoken" Text :> Get '[JSON] (SetCookied Text)
                  :<|> "cookiedata" :> Header "Cookie" Text :> Get '[JSON] CookieData
 type StaticAPI = Raw
 type API = ReaderAPI :<|> StaticAPI
@@ -59,7 +59,7 @@ readerServer :: ServerT ReaderAPI App
 readerServer =
   tokensignin :<|> cookiedata
 
-  where tokensignin :: Maybe String -> App (SetCookied String)
+  where tokensignin :: Maybe Text -> App (SetCookied Text)
         tokensignin token = case token of
           Nothing -> throwError $ Invalid "missing token in queryparams"
           Just t -> askGoogle t
@@ -84,23 +84,23 @@ instance FromJSON CookieData where
 instance ToJSON CookieData where
   toJSON (CookieData userid) = object ["userid" .= userid]
 
-cookiePrefix :: String
+cookiePrefix :: Text
 cookiePrefix = "Session="
 
-wrapCookie :: String -> String
-wrapCookie cookie = cookiePrefix ++ cookie
+wrapCookie :: Text -> Text
+wrapCookie cookie = cookiePrefix <> cookie
 
 unwrapCookie :: Text -> Text
-unwrapCookie = T.drop (length cookiePrefix)
+unwrapCookie = T.drop (T.length cookiePrefix)
 
 getCookieData :: GoogleTokenInfo -> App CookieData
 getCookieData = return . CookieData . _googleTokenSub
 
-encryptCookie :: CookieData -> App String
+encryptCookie :: CookieData -> App Text
 encryptCookie cookie = do
   iv <- liftIO randomIV
   config <- ask
-  return . BS.unpack $ encrypt (_appConfigClientSessionKey config) iv (BSL.toStrict $ encode cookie)
+  return . T.decodeUtf8 $ encrypt (_appConfigClientSessionKey config) iv (BSL.toStrict $ encode cookie)
 
 decryptCookie :: Text -> App CookieData
 decryptCookie cookieText = do
@@ -110,13 +110,13 @@ decryptCookie cookieText = do
   cookie <- maybe (throwError $ Invalid "couldn't decrypt cookie") return (decrypt key cookieBytes)
   maybe (throwError $ Invalid "couldn't parse cookie") return . decodeStrict' $ cookie
 
-askGoogle :: String -> App (SetCookied String)
+askGoogle :: Text -> App (SetCookied Text)
 askGoogle token = do
   request <- liftIO $ H.parseUrl "https://www.googleapis.com/oauth2/v3/tokeninfo"
-  let r = H.setQueryString [("id_token", Just $ BS.pack token)] request
+  let r = H.setQueryString [("id_token", Just $ T.encodeUtf8 token)] request
   tokenInfo <- withResponse r processGoogleResponse
   cookie <- encryptCookie =<< getCookieData tokenInfo
-  return $ addHeader (wrapCookie cookie) (unpack . _googleTokenSub $ tokenInfo)
+  return $ addHeader (wrapCookie cookie) (_googleTokenSub tokenInfo)
 
 processGoogleResponse :: H.Response (ConduitM () BS.ByteString App ()) -> App GoogleTokenInfo
 processGoogleResponse res = do
