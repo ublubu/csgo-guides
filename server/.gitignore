@@ -21,3 +21,4 @@ dev.db
 shell.nix
 clientsecret.txt
 clientid.txt
+sessionkey.txt
