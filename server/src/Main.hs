@@ -22,7 +22,7 @@ api :: Proxy API
 api = Proxy
 
 server :: AppConfig -> Server API
-server config = enter (Nat $ runApp config) signInServer :<|> serveDirectory "../static"
+server config = enter (Nat $ runApp config) signInServer :<|> serveDirectory (completeFilePath config "/static")
 
 app :: AppConfig -> Application
 app = serve api . server
@@ -31,4 +31,7 @@ runAppConfig :: AppConfig -> IO ()
 runAppConfig = run 8081 . app
 
 main :: IO ()
-main = runAppConfig =<< defaultAppConfig
+main = runAppConfig =<< defaultAppConfig "."
+
+main' :: IO ()
+main' = runAppConfig =<< defaultAppConfig ".."

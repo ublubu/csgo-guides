@@ -22,7 +22,8 @@ import Web.ClientSession
 
 data AppConfig = AppConfig { _appConfigHttpManager :: Manager
                            , _appConfigGoogleClientId :: Text
-                           , _appConfigClientSessionKey :: Key }
+                           , _appConfigClientSessionKey :: Key
+                           , _appConfigFileRoot :: FilePath }
 data AppError = Invalid Text | WrappedServantErr ServantErr
 type App = ReaderT AppConfig (ExceptT AppError IO)
 
@@ -38,9 +39,12 @@ runApp config action = do
     Right a -> Right a
 
 -- TODO: ssl for the Manager
-defaultAppConfig :: (MonadIO m) => m AppConfig
-defaultAppConfig = do
-  clientId <- liftIO . fmap T.strip $ T.readFile "../clientid.txt"
+defaultAppConfig :: (MonadIO m) => FilePath -> m AppConfig
+defaultAppConfig fileRoot = do
+  clientId <- liftIO . fmap T.strip . T.readFile $ fileRoot ++ "/clientid.txt"
   manager <- newManager
-  key <- liftIO $ getKey "../sessionkey.txt"
-  return $ AppConfig manager clientId key
+  key <- liftIO . getKey $ fileRoot ++ "/sessionkey.txt"
+  return $ AppConfig manager clientId key fileRoot
+
+completeFilePath :: AppConfig -> FilePath -> FilePath
+completeFilePath config = (++) (_appConfigFileRoot config)
