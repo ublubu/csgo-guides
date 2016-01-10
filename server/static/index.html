@@ -24,7 +24,14 @@
         var xhr = new XMLHttpRequest();
         xhr.open('GET', '/tokensignin?idtoken=' + id_token);
         xhr.onload = function() {
-          console.log('Signed in as: ' + xhr.responseText);
+          console.log('tokensignin: ' + xhr.responseText);
+
+          var xhr2 = new XMLHttpRequest();
+          xhr2.open('GET', '/cookiedata');
+          xhr2.onload = function() {
+            console.log('cookiedata: ' + xhr2.responseText);
+          };
+          xhr2.send();
         };
         xhr.send();
       };
