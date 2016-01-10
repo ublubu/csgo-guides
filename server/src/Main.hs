@@ -21,11 +21,14 @@ type API = SignInAPI :<|> StaticAPI
 api :: Proxy API
 api = Proxy
 
-server' :: Server API
-server' = enter (Nat runApp) signInServer :<|> serveDirectory "../static"
+server :: AppConfig -> Server API
+server config = enter (Nat $ runApp config) signInServer :<|> serveDirectory "../static"
 
-app :: Application
-app = serve api $ server'
+app :: AppConfig -> Application
+app = serve api . server
+
+runAppConfig :: AppConfig -> IO ()
+runAppConfig = run 8081 . app
 
 main :: IO ()
-main = run 8081 app
+main = runAppConfig =<< defaultAppConfig
