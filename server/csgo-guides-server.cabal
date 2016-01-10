@@ -67,6 +67,7 @@ library
                      , conduit
                      , either
                      , http-conduit
+                     , http-types
                      , jwt
                      , lens
                      , monad-logger
@@ -112,6 +113,7 @@ executable tile-rider-server
                      , conduit
                      , either
                      , http-conduit
+                     , http-types
                      , jwt
                      , lens
                      , monad-logger
