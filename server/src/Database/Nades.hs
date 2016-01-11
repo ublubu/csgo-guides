@@ -27,12 +27,17 @@ Nade
   title Text
   description Text Maybe
   tags [Text]
-  deriving Show
+  deriving Eq Show
 NadeList
   authorId Text
   title Text
   description Text Maybe
-  nades [NadeId]
+  deriving Eq Show
+NadeListing
+  ordinal Int
+  nade NadeId
+  nadeList NadeListId
+  deriving Eq Show
 |]
 
 doMigrations :: ReaderT SqlBackend IO ()
