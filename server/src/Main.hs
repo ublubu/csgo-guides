@@ -8,27 +8,34 @@ module Main where
 
 import Network.Wai
 import Network.Wai.Handler.Warp (run)
+import Network.Wai.Middleware.RequestLogger (logStdoutDev, logStdout)
 import Servant
 import Servant.Server
 
+import API.Nades
 import API.SignIn
+import Database.Nades (loadDb)
 import Server.App
+import Server.Nades
 import Server.SignIn
 
 type StaticAPI = Raw
-type API = SignInAPI :<|> StaticAPI
+type API = (SignInAPI :<|> NadeAPI) :<|> StaticAPI
 
 api :: Proxy API
 api = Proxy
 
 server :: AppConfig -> Server API
-server config = enter (Nat $ runApp config) signInServer :<|> serveDirectory (completeFilePath config "/static")
+server config = f (signInServer :<|> nadeServer) :<|> serveDirectory (completeFilePath config "/static")
+  where f = enter (Nat $ runApp config)
 
 app :: AppConfig -> Application
 app = serve api . server
 
 runAppConfig :: AppConfig -> IO ()
-runAppConfig = run 8081 . app
+runAppConfig config = do
+  loadDb config
+  run 8081 . logStdoutDev . app $ config
 
 main :: IO ()
 main = runAppConfig =<< defaultAppConfig "."

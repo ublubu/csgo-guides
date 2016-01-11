@@ -22,3 +22,5 @@ shell.nix
 clientsecret.txt
 clientid.txt
 sessionkey.txt
+dev.db*
+src/dev.db*

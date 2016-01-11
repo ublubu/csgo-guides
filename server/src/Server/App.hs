@@ -8,6 +8,7 @@ module Server.App where
 
 import Control.Monad.Trans.Either
 import Control.Monad.Except
+import Control.Monad.Logger (runNoLoggingT, runStdoutLoggingT)
 import Control.Monad.Reader
 import Control.Monad.IO.Class (liftIO, MonadIO)
 import Data.Text (Text)
@@ -15,7 +16,10 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Data.Text.Lazy (fromStrict)
 import Data.Text.Lazy.Encoding (encodeUtf8, decodeUtf8)
+import Database.Persist.Sql (ConnectionPool)
+import Database.Persist.Sqlite (createSqlitePool)
 import Network.HTTP.Client.Conduit (Manager, HasHttpManager(..), newManager)
+import Network.Wai (Middleware)
 import Servant
 import Servant.Server
 import Web.ClientSession
@@ -23,7 +27,10 @@ import Web.ClientSession
 data AppConfig = AppConfig { _appConfigHttpManager :: Manager
                            , _appConfigGoogleClientId :: Text
                            , _appConfigClientSessionKey :: Key
-                           , _appConfigFileRoot :: FilePath }
+                           , _appConfigFileRoot :: FilePath
+                           , _appConfigSqlPool :: ConnectionPool
+                           }
+
 data AppError = Invalid Text | WrappedServantErr ServantErr
 type App = ReaderT AppConfig (ExceptT AppError IO)
 
@@ -43,8 +50,12 @@ defaultAppConfig :: (MonadIO m) => FilePath -> m AppConfig
 defaultAppConfig fileRoot = do
   clientId <- liftIO . fmap T.strip . T.readFile $ fileRoot ++ "/clientid.txt"
   manager <- newManager
+  pool <- makePool
   key <- liftIO . getKey $ fileRoot ++ "/sessionkey.txt"
-  return $ AppConfig manager clientId key fileRoot
+  return $ AppConfig manager clientId key fileRoot pool
 
 completeFilePath :: AppConfig -> FilePath -> FilePath
 completeFilePath config = (++) (_appConfigFileRoot config)
+
+makePool :: (MonadIO m) => m ConnectionPool
+makePool = liftIO . runStdoutLoggingT $ createSqlitePool "dev.db" 1
