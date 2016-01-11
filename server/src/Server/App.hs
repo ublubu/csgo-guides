@@ -17,7 +17,7 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Data.Text.Lazy (fromStrict)
 import Data.Text.Lazy.Encoding (encodeUtf8, decodeUtf8)
-import Database.Persist.Sql (ConnectionPool, runSqlPool)
+import Database.Persist.Sql (SqlPersistT, ConnectionPool, runSqlPool)
 import Database.Persist.Sqlite (createSqlitePool)
 import Network.HTTP.Client.Conduit (Manager, HasHttpManager(..), newManager)
 import Network.Wai (Middleware)
@@ -34,6 +34,7 @@ data AppConfig = AppConfig { _appConfigHttpManager :: Manager
                            , _appConfigSqlPool :: ConnectionPool
                            }
 
+-- TODO: just use ServantErr
 data AppError = Invalid Text | WrappedServantErr ServantErr
 type App = ReaderT AppConfig (ExceptT AppError IO)
 
@@ -67,6 +68,10 @@ loadDb :: AppConfig -> IO ()
 loadDb config =
   runSqlPool doMigrations $ _appConfigSqlPool config
 
+runDb :: (MonadIO m, MonadReader AppConfig m) => SqlPersistT IO b -> m b
 runDb query = do
   pool <- asks _appConfigSqlPool
   liftIO $ runSqlPool query pool
+
+throwWrapped :: (MonadError AppError m) => ServantErr -> m a
+throwWrapped = throwError . WrappedServantErr
