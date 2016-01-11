@@ -15,29 +15,25 @@ module Database.Nades where
 import Control.Monad.Reader (ReaderT, asks, liftIO)
 import Data.Aeson (ToJSON, FromJSON)
 import Data.Text (Text)
-import Database.Persist.Sql (SqlBackend(..), runMigration, runSqlPool)
+import Database.Persist.Sql (SqlBackend(..), runMigration)
 import Database.Persist.TH (share, mkPersist, sqlSettings,
                             mkMigrate, persistLowerCase)
 import GHC.Generics (Generic)
-
-import Server.App
 
 share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
 Nade
   authorId Text
   images [Text]
-  description Text
+  title Text
+  description Text Maybe
   tags [Text]
   deriving Show
+NadeList
+  authorId Text
+  title Text
+  description Text Maybe
+  nades [NadeId]
 |]
 
 doMigrations :: ReaderT SqlBackend IO ()
 doMigrations = runMigration migrateAll
-
-loadDb :: AppConfig -> IO ()
-loadDb config =
-  runSqlPool doMigrations $ _appConfigSqlPool config
-
-runDb query = do
-  pool <- asks _appConfigSqlPool
-  liftIO $ runSqlPool query pool

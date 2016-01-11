@@ -3,6 +3,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Server.App where
 
@@ -16,13 +17,15 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Data.Text.Lazy (fromStrict)
 import Data.Text.Lazy.Encoding (encodeUtf8, decodeUtf8)
-import Database.Persist.Sql (ConnectionPool)
+import Database.Persist.Sql (ConnectionPool, runSqlPool)
 import Database.Persist.Sqlite (createSqlitePool)
 import Network.HTTP.Client.Conduit (Manager, HasHttpManager(..), newManager)
 import Network.Wai (Middleware)
 import Servant
 import Servant.Server
 import Web.ClientSession
+
+import Database.Nades
 
 data AppConfig = AppConfig { _appConfigHttpManager :: Manager
                            , _appConfigGoogleClientId :: Text
@@ -59,3 +62,11 @@ completeFilePath config = (++) (_appConfigFileRoot config)
 
 makePool :: (MonadIO m) => m ConnectionPool
 makePool = liftIO . runStdoutLoggingT $ createSqlitePool "dev.db" 1
+
+loadDb :: AppConfig -> IO ()
+loadDb config =
+  runSqlPool doMigrations $ _appConfigSqlPool config
+
+runDb query = do
+  pool <- asks _appConfigSqlPool
+  liftIO $ runSqlPool query pool

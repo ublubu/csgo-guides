@@ -39,7 +39,7 @@ signInServer =
           Just t -> askGoogle t
 
         cookiedata :: Maybe Text -> App CookieData
-        cookiedata = maybe (throwError $ Invalid "no cookie provided") (decryptCookie . unwrapCookie)
+        cookiedata = withCookieText return
 
 data GoogleTokenInfo = GoogleTokenInfo { _googleTokenAud :: Text
                                        , _googleTokenSub :: Text
@@ -48,6 +48,10 @@ data GoogleTokenInfo = GoogleTokenInfo { _googleTokenAud :: Text
 instance FromJSON GoogleTokenInfo where
   parseJSON (Object v) = GoogleTokenInfo <$> v .: "aud" <*> v .: "sub"
   parseJSON _ = mzero
+
+withCookieText :: (CookieData -> App a) -> Maybe Text -> App a
+withCookieText f =
+  f <=< maybe (throwError $ Invalid "no cookie provided") (decryptCookie . unwrapCookie)
 
 cookiePrefix :: Text
 cookiePrefix = "Session="

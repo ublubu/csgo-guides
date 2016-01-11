@@ -92,6 +92,7 @@ executable tile-rider-server
                      , clientsession
                      , conduit
                      , either
+                     , esqueleto
                      , http-conduit
                      , http-types
                      , jwt

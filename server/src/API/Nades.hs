@@ -13,11 +13,21 @@ import GHC.Generics
 import Servant.API
 
 data Nade = Nade { _nadeImages :: [Text]
-                 , _nadeDescription :: Text
+                 , _nadeTitle :: Text
+                 , _nadeDescription :: Maybe Text
                  , _nadeTags :: [Text]
                  } deriving (Show, Eq, Generic)
+
+data NadeList = NadeList { _nadeListTitle :: Text
+                         , _nadeListDescription :: Maybe Text
+                         , _nadeListNades :: [Nade]
+                         } deriving (Show, Eq, Generic)
 
 instance FromJSON Nade
 instance ToJSON Nade
 
+instance FromJSON NadeList
+instance ToJSON NadeList
+
 type NadeAPI = "nades" :> Get '[JSON] [Nade]
+               :<|> "my-nades" :> Header "Cookie" Text :> Get '[JSON] [Nade]

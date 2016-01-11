@@ -14,7 +14,6 @@ import Servant.Server
 
 import API.Nades
 import API.SignIn
-import Database.Nades (loadDb)
 import Server.App
 import Server.Nades
 import Server.SignIn
