@@ -4,6 +4,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Server.Nades where
 
@@ -30,7 +31,7 @@ nadeFromDb nade = nadeFromDb' (fromSqlKey . entityKey $ nade) (entityVal nade)
 
 nadeFromDb' :: Int64 -> DN.Nade -> Nade
 nadeFromDb' key DN.Nade{..} =
-  Nade nadeAuthorId nadeImages nadeTitle nadeDescription nadeTags key
+  dbFill nadeAuthorId key $ Nade' nadeImages nadeTitle nadeDescription nadeTags
 
 nadeListFromDb :: Entity DN.NadeList -> [Entity DN.Nade] -> NadeList
 nadeListFromDb nadeList nades =
@@ -39,25 +40,35 @@ nadeListFromDb nadeList nades =
 
 nadeListFromDb' :: Int64 -> DN.NadeList -> [Nade] -> NadeList
 nadeListFromDb' key DN.NadeList{..} nades =
-  NadeList nadeListAuthorId nadeListTitle nadeListDescription nades key
+  dbFill nadeListAuthorId key $ NadeList'' nadeListTitle nadeListDescription nades
 
-nadeToDb :: Nade -> (Key DN.Nade, DN.Nade)
-nadeToDb nade = (toSqlKey . _nadeKey $ nade, nadeToDb' nade)
+nadeToDb :: Nade -> DN.Nade
+nadeToDb nade = nadeToDb' (_dbFilledAuthor nade) (_dbFilledContents nade)
 
-nadeToDb' :: Nade -> DN.Nade
-nadeToDb' Nade{..} =
-  DN.Nade _nadeAuthor _nadeImages _nadeTitle _nadeDescription _nadeTags
+nadeToDb' :: Text -> Nade' -> DN.Nade
+nadeToDb' author Nade'{..} =
+  DN.Nade author _nadeImages _nadeTitle _nadeDescription _nadeTags
 
 nadeServer :: ServerT NadeAPI App
 nadeServer =
-  allNades :<|> postNade :<|> getNade :<|> putNade :<|> deleteNade
+  getNades
+  :<|> postNade :<|> getNade :<|> putNade :<|> deleteNade
   :<|> withCookieText myNades
   :<|> getNadeLists
+  :<|> postNadeList :<|> getNadeList :<|> putNadeList :<|> deleteNadeList
   :<|> withCookieText myNadeLists
 
-allNades :: App [Nade]
-allNades = do
+getNades :: App [Nade]
+getNades = do
   nades <- runDb $ select $ from $ return
+  let nades' = fmap nadeFromDb nades
+  return nades'
+
+myNades :: CookieData -> App [Nade]
+myNades CookieData{..} = do
+  nades <- runDb $ select $ from $ \n -> do
+    where_ (n ^. DN.NadeAuthorId ==. val _cookieDataUserId)
+    return n
   let nades' = fmap nadeFromDb nades
   return nades'
 
@@ -67,26 +78,24 @@ getNade key = do
   case nade of Nothing -> throwWrapped err404
                Just n -> return . nadeFromDb' key $ n
 
-postNade :: Nade -> Maybe Text -> App Nade
+postNade :: Nade' -> Maybe Text -> App Nade
 postNade nade =
   withCookieText
   (\(CookieData{..}) -> do
-      let nade' = nade{ _nadeAuthor = _cookieDataUserId }
-      key <- runDb . insert . nadeToDb' $ nade'
-      return nade'{ _nadeKey = fromSqlKey key }
+      key <- runDb . insert . nadeToDb' _cookieDataUserId $ nade
+      return . dbFill _cookieDataUserId (fromSqlKey key) $ nade
       )
 
 -- TODO: check author using SQL query
-putNade :: Int64 -> Nade -> Maybe Text -> App Nade
+putNade :: Int64 -> Nade' -> Maybe Text -> App Nade
 putNade key nade =
   withCookieText
   (\(CookieData{..}) -> do
       oldNade <- getNade key
-      when (_nadeAuthor oldNade /= _cookieDataUserId) $
+      when (_dbFilledAuthor oldNade /= _cookieDataUserId) $
         throwWrapped err403 -- only can change your own nades
-      let nade' = nade{ _nadeAuthor = _cookieDataUserId
-                      , _nadeKey = key }
-      void . runDb . uncurry replace . nadeToDb $ nade'
+      let nade' = dbFill _cookieDataUserId key nade
+      void . runDb . replace (toSqlKey key) . nadeToDb $ nade'
       return nade'
       )
 
@@ -99,33 +108,49 @@ deleteNade key =
                 &&. n ^. DN.NadeAuthorId ==. val _cookieDataUserId)
       )
 
-myNades :: CookieData -> App [Nade]
-myNades CookieData{..} = do
-  nades <- runDb $ select $ from $ \n -> do
-    where_ (n ^. DN.NadeAuthorId ==. val _cookieDataUserId)
-    return n
-  let nades' = fmap nadeFromDb nades
-  return nades'
-
 collapseNadeListings :: (Eq a) => [(a, b)] -> [(a, [b])]
 collapseNadeListings = fmap f . L.groupBy ((==) `F.on` fst)
   where f nades = (fst . head $ nades, fmap snd nades)
 
-getNadeLists :: App [NadeList]
-getNadeLists = do
-  nadeListings <- runDb $ select $ from $ \(n `InnerJoin` nlg `InnerJoin` nl) -> do
-    on (nl ^. DN.NadeListId ==. nlg ^. DN.NadeListingNadeList)
-    on (n ^. DN.NadeId ==. nlg ^. DN.NadeListingNade)
-    orderBy [asc (nl ^. DN.NadeListId), asc (nlg ^. DN.NadeListingOrdinal)]
-    return (nl, n)
+type SqlNadeListFilter = SqlExpr (Entity DN.Nade) -> SqlExpr (Entity DN.NadeListing) -> SqlExpr (Entity DN.NadeList) -> SqlQuery ()
+noFilter :: SqlNadeListFilter
+noFilter _ _ _ = return ()
+
+nadeListsQuery :: SqlNadeListFilter -> SqlQuery (SqlExpr (Entity DN.NadeList), SqlExpr (Entity DN.Nade))
+nadeListsQuery filter = from $ \(n `InnerJoin` nlg `InnerJoin` nl) -> do
+  on (nl ^. DN.NadeListId ==. nlg ^. DN.NadeListingNadeList)
+  on (n ^. DN.NadeId ==. nlg ^. DN.NadeListingNade)
+  filter n nlg nl
+  orderBy [asc (nl ^. DN.NadeListId), asc (nlg ^. DN.NadeListingOrdinal)]
+  return (nl, n)
+
+filteredNadeLists :: SqlNadeListFilter -> App [NadeList]
+filteredNadeLists filter = do
+  nadeListings <- runDb $ select $ nadeListsQuery filter
   return . fmap (uncurry nadeListFromDb) . collapseNadeListings $ nadeListings
 
+getNadeLists :: App [NadeList]
+getNadeLists = filteredNadeLists noFilter
+
 myNadeLists :: CookieData -> App [NadeList]
-myNadeLists CookieData{..} = do
-  nadeListings <- runDb $ select $ from $ \(n `InnerJoin` nlg `InnerJoin` nl) -> do
-    on (nl ^. DN.NadeListId ==. nlg ^. DN.NadeListingNadeList)
-    on (n ^. DN.NadeId ==. nlg ^. DN.NadeListingNade)
-    where_ (nl ^. DN.NadeListAuthorId ==. val _cookieDataUserId)
-    orderBy [asc (nl ^. DN.NadeListId), asc (nlg ^. DN.NadeListingOrdinal)]
-    return (nl, n)
-  return . fmap (uncurry nadeListFromDb) . collapseNadeListings $ nadeListings
+myNadeLists CookieData{..} =
+  filteredNadeLists (\n nlg nl -> where_ (nl ^. DN.NadeListAuthorId ==. val _cookieDataUserId))
+
+getNadeList :: Int64 -> App NadeList
+getNadeList key =
+  firstOr404 =<< filteredNadeLists (\n nlg nl -> where_ (nl ^. DN.NadeListId ==. val (toSqlKey key)))
+
+postNadeList :: NadeList' -> Maybe Text -> App NadeList
+postNadeList nade =
+  withCookieText
+  (\(CookieData{..}) -> _)
+
+putNadeList :: Int64 -> NadeList' -> Maybe Text -> App NadeList
+putNadeList key nade =
+  withCookieText
+  (\(CookieData{..}) -> _)
+
+deleteNadeList :: Int64 -> Maybe Text -> App ()
+deleteNadeList key =
+  withCookieText
+  (\(CookieData{..}) -> _)

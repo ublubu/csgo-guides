@@ -75,3 +75,7 @@ runDb query = do
 
 throwWrapped :: (MonadError AppError m) => ServantErr -> m a
 throwWrapped = throwError . WrappedServantErr
+
+firstOr404 :: (MonadError AppError m) => [a] -> m a
+firstOr404 [] = throwWrapped err404
+firstOr404 (x:_) = return x
