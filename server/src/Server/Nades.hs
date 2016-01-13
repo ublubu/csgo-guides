@@ -55,11 +55,6 @@ nadeListToDb' :: Text -> NadeList' -> DN.NadeList
 nadeListToDb' author NadeList''{..} =
   DN.NadeList author _nadeListTitle _nadeListDescription
 
-nadeListingsForDb :: Key DN.NadeList -> NadeList' -> [DN.NadeListing]
-nadeListingsForDb nadeListKey NadeList''{..} =
-  fmap f . zip [1..] $ _nadeListNades
-  where f (ord, nadeKey) = DN.NadeListing ord (toSqlKey nadeKey) nadeListKey
-
 nadeServer :: ServerT NadeAPI App
 nadeServer =
   getNades
@@ -95,7 +90,7 @@ postNade nade =
   (\(CookieData{..}) -> do
       key <- runDb . insert . nadeToDb' _cookieDataUserId $ nade
       return . dbFill _cookieDataUserId (fromSqlKey key) $ nade
-      )
+  )
 
 -- TODO: check author using SQL query
 putNade :: Int64 -> Nade' -> Maybe Text -> App Nade
@@ -108,7 +103,7 @@ putNade key nade =
       let nade' = dbFill _cookieDataUserId key nade
       void . runDb . replace (toSqlKey key) . nadeToDb $ nade'
       return nade'
-      )
+  )
 
 deleteNade :: Int64 -> Maybe Text -> App ()
 deleteNade key =
@@ -117,93 +112,103 @@ deleteNade key =
       void . runDb $ delete $ from $ \n -> do
         where_ (n ^. DN.NadeId ==. val (toSqlKey key)
                 &&. n ^. DN.NadeAuthorId ==. val _cookieDataUserId)
-      )
+  )
 
 collapseNadeListings :: (Eq a) => [(a, b)] -> [(a, [b])]
 collapseNadeListings = fmap f . L.groupBy ((==) `F.on` fst)
   where f nades = (fst . head $ nades, fmap snd nades)
 
-type SqlNadeListFilter = SqlExpr (Entity DN.Nade) -> SqlExpr (Entity DN.NadeListing) -> SqlExpr (Entity DN.NadeList) -> SqlQuery ()
+type FullNadeListFilter = SqlExpr (Entity DN.Nade) -> SqlExpr (Entity DN.NadeListing) -> SqlExpr (Entity DN.NadeList) -> SqlQuery ()
 
-noNadeListFilter :: SqlNadeListFilter
-noNadeListFilter _ _ _ = return ()
+noFNLFilter :: FullNadeListFilter
+noFNLFilter _ _ _ = return ()
 
-filterNadeListAuthor :: Text -> SqlNadeListFilter
-filterNadeListAuthor author n nlg nl =
+authorFNLFilter :: Text -> FullNadeListFilter
+authorFNLFilter author n nlg nl =
   where_ (nl ^. DN.NadeListAuthorId ==. val author)
 
-filterOneNadeList :: Key DN.NadeList -> SqlNadeListFilter
-filterOneNadeList key n nlg nl =
+keyFNLFilter :: Key DN.NadeList -> FullNadeListFilter
+keyFNLFilter key n nlg nl =
   where_ (nl ^. DN.NadeListId ==. val key)
 
+authorKeyFNLFilter :: Text -> Key DN.NadeList -> FullNadeListFilter
+authorKeyFNLFilter author key n nlg nl =
+  where_ (nl ^. DN.NadeListId ==. val key
+          &&. nl ^. DN.NadeListAuthorId ==. val author)
+
 -- TODO: LeftOuterJoin to include empty NadeLists
-nadeListsQuery' :: SqlNadeListFilter -> SqlQuery (SqlExpr (Entity DN.NadeList), SqlExpr (Entity DN.Nade))
-nadeListsQuery' filter = from $ \(n `InnerJoin` nlg `InnerJoin` nl) -> do
+fnlsQuery' :: FullNadeListFilter -> SqlQuery (SqlExpr (Entity DN.NadeList), SqlExpr (Entity DN.Nade))
+fnlsQuery' filter = from $ \(n `InnerJoin` nlg `InnerJoin` nl) -> do
   on (nl ^. DN.NadeListId ==. nlg ^. DN.NadeListingNadeList)
   on (n ^. DN.NadeId ==. nlg ^. DN.NadeListingNade)
   filter n nlg nl
   orderBy [asc (nl ^. DN.NadeListId), asc (nlg ^. DN.NadeListingOrdinal)]
   return (nl, n)
 
-nadeListsQuery :: (MonadIO m) => SqlNadeListFilter -> SqlPersistT m [NadeList]
-nadeListsQuery filter = do
-  nadeListings <- select $ nadeListsQuery' filter
+fnlsQuery :: (MonadIO m) => FullNadeListFilter -> SqlPersistT m [NadeList]
+fnlsQuery filter = do
+  nadeListings <- select $ fnlsQuery' filter
   return . fmap (uncurry nadeListFromDb) . collapseNadeListings $ nadeListings
 
-filteredNadeLists :: SqlNadeListFilter -> App [NadeList]
-filteredNadeLists filter = runDb $ nadeListsQuery filter
+filteredFNLs :: FullNadeListFilter -> App [NadeList]
+filteredFNLs filter = runDb $ fnlsQuery filter
 
 getNadeLists :: App [NadeList]
-getNadeLists = filteredNadeLists noNadeListFilter
+getNadeLists = filteredFNLs noFNLFilter
 
 myNadeLists :: CookieData -> App [NadeList]
 myNadeLists CookieData{..} =
-  filteredNadeLists $ filterNadeListAuthor _cookieDataUserId
+  filteredFNLs $ authorFNLFilter _cookieDataUserId
 
 getNadeList :: Int64 -> App NadeList
 getNadeList key =
-  firstOr404 =<< filteredNadeLists (filterOneNadeList $ toSqlKey key)
-
-insertNadeList' :: (MonadIO m) => Text -> NadeList' -> SqlPersistT m (Key DN.NadeList, [Key DN.NadeListing])
-insertNadeList' author nadeList = do
-  nadeListKey <- insert . nadeListToDb' author $ nadeList
-  nadeListingKeys <- insertMany . nadeListingsForDb nadeListKey $ nadeList
-  return (nadeListKey, nadeListingKeys)
-
-insertNadeList :: (MonadIO m) => Text -> NadeList' -> SqlPersistT m (Maybe NadeList)
-insertNadeList author nadeList = do
-  (nadeListKey, _) <- insertNadeList' author nadeList
-  nadeLists <- nadeListsQuery $ filterOneNadeList nadeListKey
-  return $ listToMaybe nadeLists
+  firstOr404 =<< filteredFNLs (keyFNLFilter $ toSqlKey key)
 
 postNadeList :: NadeList' -> Maybe Text -> App NadeList
 postNadeList nadeList =
   withCookieText
   (\(CookieData{..}) -> do
-      nadeList <- runDb $ insertNadeList _cookieDataUserId nadeList
-      maybe (throwWrapped err500) return nadeList
-      )
+      nadeListKey <- runDb $ insert . nadeListToDb' _cookieDataUserId $ nadeList
+      let key = fromSqlKey nadeListKey
+      return $ dbFill _cookieDataUserId key . convertNadeList' [] $ nadeList
+  )
 
-type SqlNadeListingFilter = SqlExpr (Entity DN.NadeListing) -> SqlQuery ()
+type NadeListingFilter = SqlExpr (Entity DN.NadeListing) -> SqlQuery ()
 
-filterOneNadeList' :: Key DN.NadeList -> SqlNadeListingFilter
-filterOneNadeList' key nlg =
-  where_ (nlg ^. DN.NadeListingNadeList ==. val key)
+nlNLGFilter' :: Key DN.NadeList -> NadeListingFilter
+nlNLGFilter' nadeListKey nlg =
+  where_ (nlg ^. DN.NadeListingNadeList ==. val nadeListKey)
 
-nadeListingsQuery' :: SqlNadeListingFilter -> SqlQuery (SqlExpr (Entity DN.NadeListing))
-nadeListingsQuery' filter = from $ \nlg -> do
-  filter nlg
-  return nlg
+setNadeList' :: NadeList' -> SqlExpr (Entity DN.NadeList) -> SqlQuery ()
+setNadeList' NadeList''{..} nl =
+  set nl [ DN.NadeListTitle =. val _nadeListTitle
+         , DN.NadeListDescription =. val _nadeListDescription
+         ]
 
-replaceNadeList' :: (MonadIO m) => Text -> Key DN.NadeList -> NadeList' -> SqlPersistT m [Key DN.NadeListing]
-replaceNadeList' author nadeListKey nadeList = _
+type NadeListFilter = SqlExpr (Entity DN.NadeList) -> SqlQuery ()
 
-putNadeList :: Int64 -> NadeList' -> Maybe Text -> App NadeList
-putNadeList key nade =
+authorKeyNLFilter :: Text -> Key DN.NadeList -> NadeListFilter
+authorKeyNLFilter author key nl =
+  where_ (nl ^. DN.NadeListId ==. val key
+          &&. nl ^. DN.NadeListAuthorId ==. val author)
+
+putNadeList :: Int64 -> NadeList' -> Maybe Text -> App NadeList'
+putNadeList key nadeList =
   withCookieText
-  (\(CookieData{..}) -> _)
+  (\(CookieData{..}) -> do
+      runDb . update $ (\nl -> do
+                           setNadeList' nadeList nl
+                           authorKeyNLFilter _cookieDataUserId (toSqlKey key) nl
+                       )
+      return nadeList
+  )
 
 deleteNadeList :: Int64 -> Maybe Text -> App ()
 deleteNadeList key =
   withCookieText
-  (\(CookieData{..}) -> _)
+  (\(CookieData{..}) -> do
+      runDb $ do
+        let key' = toSqlKey key
+        deleted <- deleteCount $ from $ authorKeyNLFilter _cookieDataUserId key'
+        when (deleted > 0) $ delete $ from $ nlNLGFilter' key'
+  )
