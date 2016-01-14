@@ -66,7 +66,7 @@ type NadeListAPI =
   "nadeLists" :> Get '[JSON] [NadeList]
   :<|> "nadeLists" :> ReqBody '[JSON] NadeList' :> Cookied :> Post '[JSON] NadeList
   :<|> "nadeLists" :> Capture "nadeListId" Int64 :> Get '[JSON] NadeList
-  :<|> "nadeLists" :> Capture "nadeListId" Int64 :> ReqBody '[JSON] NadeList' :> Cookied :> Put '[JSON] NadeList'
+  :<|> "nadeLists" :> Capture "nadeListId" Int64 :> ReqBody '[JSON] NadeList' :> Cookied :> Put '[JSON] NadeList
   :<|> "nadeLists" :> Capture "nadeListId" Int64 :> Cookied :> Delete '[JSON] ()
   :<|> "myNadeLists" :> Cookied :> Get '[JSON] [NadeList]
 

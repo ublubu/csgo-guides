@@ -166,16 +166,17 @@ deleteNadeListings :: (MonadIO m) => Key DN.NadeList -> SqlPersistT m ()
 deleteNadeListings key =
   delete $ from $ nlNLGFilter key
 
-putNadeList :: Int64 -> NadeList' -> Maybe Text -> App NadeList'
+putNadeList :: Int64 -> NadeList' -> Maybe Text -> App NadeList
 putNadeList key nadeList =
   withCookieText
   (\(CookieData{..}) -> do
       let key' = toSqlKey key
-      runDbExcept $ do
+      nadeLists <- runDbExcept $ do
         updateNadeList' _cookieDataUserId key' nadeList
         rightDb $ deleteNadeListings key'
         rightDb $ insertNadeListings' key' nadeList
-      return nadeList
+        rightDb $ fnlsQuery (keyFNLFilter key')
+      firstOr404 nadeLists
   )
 
 deleteNadeList' :: (MonadIO m) => Text -> Key DN.NadeList -> ExceptSqlT m ()
