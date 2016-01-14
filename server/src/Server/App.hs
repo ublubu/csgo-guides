@@ -73,6 +73,23 @@ runDb query = do
   pool <- asks _appConfigSqlPool
   liftIO $ runSqlPool query pool
 
+type ExceptSqlT m = ExceptT AppError (SqlPersistT m)
+
+runDbExcept' :: (MonadIO m, MonadReader AppConfig m) => ExceptT e (SqlPersistT IO) b -> m (Either e b)
+runDbExcept' = runDb . runExceptT
+
+runDbExcept :: (MonadIO m, MonadReader AppConfig m, MonadError e m) => ExceptT e (SqlPersistT IO) b -> m b
+runDbExcept query = do
+  result <- runDbExcept' query
+  case result of Left err -> throwError err
+                 Right x -> return x
+
+rightDb :: (Monad m) => SqlPersistT m b -> ExceptT e (SqlPersistT m) b
+rightDb = ExceptT . fmap Right
+
+exceptDb :: (Monad m) => (b -> Either e c) -> SqlPersistT m b -> ExceptT e (SqlPersistT m) c
+exceptDb condition = ExceptT . fmap condition
+
 throwWrapped :: (MonadError AppError m) => ServantErr -> m a
 throwWrapped = throwError . WrappedServantErr
 

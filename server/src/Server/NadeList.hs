@@ -147,12 +147,20 @@ authorKeyNLFilter author key nl =
   where_ (nl ^. DN.NadeListId ==. val key
           &&. nl ^. DN.NadeListAuthorId ==. val author)
 
-updateNadeList' :: (MonadIO m) => Text -> Key DN.NadeList -> NadeList' -> SqlPersistT m Int64
+errorWhenNone :: (Num a, Ord a) => e -> a -> Either e ()
+errorWhenNone e x
+  | x <= 0 = Left e
+  | otherwise = Right ()
+
+errorWhenNone' :: (Num a, Ord a) => ServantErr -> a -> Either AppError ()
+errorWhenNone' = errorWhenNone . WrappedServantErr
+
+updateNadeList' :: (MonadIO m) => Text -> Key DN.NadeList -> NadeList' -> ExceptSqlT m ()
 updateNadeList' author key nadeList =
-  updateCount $ (\nl -> do
-               setNadeList' nadeList nl
-               authorKeyNLFilter author key nl
-           )
+  let query nl = do
+        setNadeList' nadeList nl
+        authorKeyNLFilter author key nl
+  in exceptDb (errorWhenNone' err403) $ updateCount query
 
 deleteNadeListings :: (MonadIO m) => Key DN.NadeList -> SqlPersistT m ()
 deleteNadeListings key =
@@ -162,30 +170,25 @@ putNadeList :: Int64 -> NadeList' -> Maybe Text -> App NadeList'
 putNadeList key nadeList =
   withCookieText
   (\(CookieData{..}) -> do
-      notAuthor <- runDb $ do
-        let key' = toSqlKey key
-        updated <- updateNadeList' _cookieDataUserId key' nadeList
-        if (updated <= 0)
-          then return True
-          else do
-          deleteNadeListings key'
-          insertNadeListings' key' nadeList
-          return False
-      when notAuthor $ throwWrapped err403
+      let key' = toSqlKey key
+      runDbExcept $ do
+        updateNadeList' _cookieDataUserId key' nadeList
+        rightDb $ deleteNadeListings key'
+        rightDb $ insertNadeListings' key' nadeList
       return nadeList
   )
+
+deleteNadeList' :: (MonadIO m) => Text -> Key DN.NadeList -> ExceptSqlT m ()
+deleteNadeList' author key =
+  let query = from $ authorKeyNLFilter author key
+  in exceptDb (errorWhenNone' err403) $ deleteCount query
 
 deleteNadeList :: Int64 -> Maybe Text -> App ()
 deleteNadeList key =
   withCookieText
   (\(CookieData{..}) -> do
-      notAuthor <- runDb $ do
-        let key' = toSqlKey key
-        deleted <- deleteCount $ from $ authorKeyNLFilter _cookieDataUserId key'
-        if (deleted > 0)
-          then do
-          delete $ from $ nlNLGFilter key'
-          return False
-          else return True
-      when notAuthor $ throwWrapped err403
+      let key' = toSqlKey key
+      runDbExcept $ do
+        deleteNadeList' _cookieDataUserId key'
+        rightDb $ delete $ from $ nlNLGFilter key'
   )
