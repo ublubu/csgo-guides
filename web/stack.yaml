@@ -14,6 +14,7 @@ packages:
 - location: '.'
 - location: '../parsing'
 - location: '../api'
+- location: 'lib/ghcjs-servant-client'
 - location:
     git: https://github.com/ryantrinkle/reflex-dom.git
     commit: f4dbdd799260bc203f7f5cdce18362cb896f6d57 # ghcjs-improved-base-2 branch

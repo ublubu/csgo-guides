@@ -72,6 +72,7 @@ executable csgo-guides-web
                      , parsec
                      , either
                      , servant
+                     , ghcjs-servant-client
   
   -- Directories containing source files.
   hs-source-dirs:      src
