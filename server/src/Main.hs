@@ -19,13 +19,13 @@ import Server.Nades
 import Server.SignIn
 
 type StaticAPI = Raw
-type API = (SignInAPI :<|> NadeAPI) :<|> StaticAPI
+type API = (SignInAPI :<|> NadesAPI) :<|> StaticAPI
 
 api :: Proxy API
 api = Proxy
 
 server :: AppConfig -> Server API
-server config = f (signInServer :<|> nadeServer) :<|> serveDirectory (completeFilePath config "/static")
+server config = f (signInServer :<|> nadesServer) :<|> serveDirectory (completeFilePath config "/static")
   where f = enter (Nat $ runApp config)
 
 app :: AppConfig -> Application

@@ -36,11 +36,11 @@ type Nade = DbFilled Nade'
 
 data NadeList'' a = NadeList'' { _nadeListTitle :: Text
                                , _nadeListDescription :: Maybe Text
-                               , _nadeListNades :: a
+                               , _nadeListNades :: [a]
                                } deriving (Show, Eq, Generic)
 
-type NadeList = DbFilled (NadeList'' [Nade])
-type NadeList' = NadeList'' ()
+type NadeList = DbFilled (NadeList'' Nade)
+type NadeList' = NadeList'' Int64
 
 instance FromJSON a => FromJSON (Authored a)
 instance ToJSON a => ToJSON (Authored a)
@@ -61,12 +61,17 @@ type NadeAPI =
   :<|> "nades" :> Capture "nadeId" Int64 :> ReqBody '[JSON] Nade' :> Cookied :> Put '[JSON] Nade
   :<|> "nades" :> Capture "nadeId" Int64 :> Cookied :> Delete '[JSON] ()
   :<|> "myNades" :> Cookied :> Get '[JSON] [Nade]
-  :<|> "nadeLists" :> Get '[JSON] [NadeList]
+
+type NadeListAPI =
+  "nadeLists" :> Get '[JSON] [NadeList]
   :<|> "nadeLists" :> ReqBody '[JSON] NadeList' :> Cookied :> Post '[JSON] NadeList
   :<|> "nadeLists" :> Capture "nadeListId" Int64 :> Get '[JSON] NadeList
   :<|> "nadeLists" :> Capture "nadeListId" Int64 :> ReqBody '[JSON] NadeList' :> Cookied :> Put '[JSON] NadeList'
   :<|> "nadeLists" :> Capture "nadeListId" Int64 :> Cookied :> Delete '[JSON] ()
   :<|> "myNadeLists" :> Cookied :> Get '[JSON] [NadeList]
+
+type NadesAPI =
+  NadeAPI :<|> NadeListAPI
 
 dbFill :: Text -> Int64 -> a -> DbFilled a
 dbFill author key x = Authored author (Keyed key x)
@@ -79,9 +84,3 @@ _dbFilledKey = _keyedKey . _authoredContents
 
 _dbFilledAuthor :: DbFilled a -> Text
 _dbFilledAuthor = _authoredAuthor
-
-convertNadeList' :: [a] -> NadeList' -> NadeList'' [a]
-convertNadeList' nades nadeList = nadeList{_nadeListNades = nades}
-
-extractNadeList' :: NadeList'' a -> NadeList'
-extractNadeList' nadeList = nadeList{_nadeListNades = ()}
