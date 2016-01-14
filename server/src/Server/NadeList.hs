@@ -9,6 +9,7 @@
 module Server.NadeList where
 
 import API.Nades
+import Control.Lens (over, _2)
 import Control.Monad
 import Control.Monad.IO.Class (liftIO, MonadIO)
 import Data.Aeson
@@ -48,9 +49,12 @@ nadeListingsForDb nadeListKey NadeList''{..} =
   fmap f . zip [1..] $ _nadeListNades
   where f (ord, nadeKey) = DN.NadeListing ord (toSqlKey nadeKey) nadeListKey
 
-collapseNadeListings :: (Eq a) => [(a, b)] -> [(a, [b])]
-collapseNadeListings = fmap f . L.groupBy ((==) `F.on` fst)
+collapseNadeListings' :: (Eq a) => [(a, b)] -> [(a, [b])]
+collapseNadeListings' = fmap f . L.groupBy ((==) `F.on` fst)
   where f nades = (fst . head $ nades, fmap snd nades)
+
+collapseNadeListings :: (Eq a) => [(a, Maybe b)] -> [(a, [b])]
+collapseNadeListings = fmap (over _2 catMaybes) . collapseNadeListings'
 
 nadeListServer :: ServerT NadeListAPI App
 nadeListServer =
@@ -58,7 +62,7 @@ nadeListServer =
   :<|> postNadeList :<|> getNadeList :<|> putNadeList :<|> deleteNadeList
   :<|> withCookieText myNadeLists
 
-type FullNadeListFilter = SqlExpr (Entity DN.Nade) -> SqlExpr (Entity DN.NadeListing) -> SqlExpr (Entity DN.NadeList) -> SqlQuery ()
+type FullNadeListFilter = SqlExpr (Maybe (Entity DN.Nade)) -> SqlExpr (Maybe (Entity DN.NadeListing)) -> SqlExpr (Entity DN.NadeList) -> SqlQuery ()
 
 noFNLFilter :: FullNadeListFilter
 noFNLFilter _ _ _ = return ()
@@ -76,13 +80,12 @@ authorKeyFNLFilter author key n nlg nl =
   where_ (nl ^. DN.NadeListId ==. val key
           &&. nl ^. DN.NadeListAuthorId ==. val author)
 
--- TODO: LeftOuterJoin to include empty NadeLists
-fnlsQuery' :: FullNadeListFilter -> SqlQuery (SqlExpr (Entity DN.NadeList), SqlExpr (Entity DN.Nade))
-fnlsQuery' filter = from $ \(n `InnerJoin` nlg `InnerJoin` nl) -> do
-  on (nl ^. DN.NadeListId ==. nlg ^. DN.NadeListingNadeList)
-  on (n ^. DN.NadeId ==. nlg ^. DN.NadeListingNade)
+fnlsQuery' :: FullNadeListFilter -> SqlQuery (SqlExpr (Entity DN.NadeList), SqlExpr (Maybe (Entity DN.Nade)))
+fnlsQuery' filter = from $ \(n `InnerJoin` nlg `RightOuterJoin` nl) -> do
+  on (just (nl ^. DN.NadeListId) ==. nlg ?. DN.NadeListingNadeList)
+  on (n ?. DN.NadeId ==. nlg ?. DN.NadeListingNade)
   filter n nlg nl
-  orderBy [asc (nl ^. DN.NadeListId), asc (nlg ^. DN.NadeListingOrdinal)]
+  orderBy [asc (just (nl ^. DN.NadeListId)), asc (nlg ?. DN.NadeListingOrdinal)]
   return (nl, n)
 
 fnlsQuery :: (MonadIO m) => FullNadeListFilter -> SqlPersistT m [NadeList]
