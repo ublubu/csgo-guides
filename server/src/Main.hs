@@ -6,6 +6,7 @@
 
 module Main where
 
+import Database.Persist.Sql (runSqlPool)
 import Network.Wai
 import Network.Wai.Handler.Warp (run)
 import Network.Wai.Middleware.RequestLogger (logStdoutDev, logStdout)
@@ -14,6 +15,7 @@ import Servant.Server
 
 import API.Nades
 import API.SignIn
+import Database.Nades
 import Server.App
 import Server.Nades
 import Server.SignIn
@@ -25,8 +27,12 @@ api :: Proxy API
 api = Proxy
 
 server :: AppConfig -> Server API
-server config = f (signInServer :<|> nadesServer) :<|> serveDirectory (completeFilePath config "/static")
+server config = f (signInServer :<|> nadesServer) :<|> serveDirectory (_appConfigStaticRoot config)
   where f = enter (Nat $ runApp config)
+
+loadDb :: AppConfig -> IO ()
+loadDb config =
+  runSqlPool doMigrations $ _appConfigSqlPool config
 
 app :: AppConfig -> Application
 app = serve api . server

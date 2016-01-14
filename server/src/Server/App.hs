@@ -25,12 +25,11 @@ import Servant
 import Servant.Server
 import Web.ClientSession
 
-import Database.Nades
-
 data AppConfig = AppConfig { _appConfigHttpManager :: Manager
                            , _appConfigGoogleClientId :: Text
                            , _appConfigClientSessionKey :: Key
                            , _appConfigFileRoot :: FilePath
+                           , _appConfigStaticRoot :: FilePath
                            , _appConfigSqlPool :: ConnectionPool
                            }
 
@@ -56,17 +55,14 @@ defaultAppConfig fileRoot = do
   manager <- newManager
   pool <- makePool
   key <- liftIO . getKey $ fileRoot ++ "/sessionkey.txt"
-  return $ AppConfig manager clientId key fileRoot pool
+  staticRoot <- liftIO . fmap T.unpack . fmap T.strip . T.readFile $ fileRoot ++ "/staticroot.txt"
+  return $ AppConfig manager clientId key fileRoot staticRoot pool
 
 completeFilePath :: AppConfig -> FilePath -> FilePath
 completeFilePath config = (++) (_appConfigFileRoot config)
 
 makePool :: (MonadIO m) => m ConnectionPool
 makePool = liftIO . runStdoutLoggingT $ createSqlitePool "dev.db" 1
-
-loadDb :: AppConfig -> IO ()
-loadDb config =
-  runSqlPool doMigrations $ _appConfigSqlPool config
 
 runDb :: (MonadIO m, MonadReader AppConfig m) => SqlPersistT IO b -> m b
 runDb query = do
