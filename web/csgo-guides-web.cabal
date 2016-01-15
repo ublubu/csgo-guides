@@ -62,6 +62,7 @@ executable csgo-guides-web
   
   -- Other library packages from which modules are imported.
   build-depends:       base >=4.8 && <4.9
+                     , aeson
                      , reflex
                      , reflex-dom
                      , mtl
@@ -77,6 +78,7 @@ executable csgo-guides-web
                      , either
                      , servant
                      , ghcjs-servant-client
+                     , ghcjs-base
   
   -- Directories containing source files.
   hs-source-dirs:      src
