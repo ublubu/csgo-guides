@@ -21,7 +21,7 @@ import Server.Nades
 import Server.SignIn
 
 type StaticAPI = Raw
-type API = (SignInAPI :<|> NadesAPI) :<|> StaticAPI
+type API = ("api" :> (SignInAPI :<|> NadesAPI)) :<|> StaticAPI
 
 api :: Proxy API
 api = Proxy
