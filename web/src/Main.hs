@@ -1,3 +1,6 @@
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE TypeFamilies #-}
+
 module Main where
 
 import Reflex
@@ -12,14 +15,19 @@ import Style
 import qualified Styles as S
 import Utils
 
+import Control.Monad.Ref
 import qualified Data.Aeson as AE
 import GHCJS.Marshal (fromJSVal)
 import GHCJS.Foreign.Callback (Callback, syncCallback1, OnBlocked(..))
 import qualified Data.JSString as JSS
 import GHCJS.Types (JSVal)
+import Reflex.Host.Class
+import Data.Dependent.Map (DSum(..))
+import Control.Monad.IO.Class
+import Control.Monad
 
-processGoogleSignIn :: JSVal -> IO ()
-processGoogleSignIn jsval = do
+printGoogleSignIn :: JSVal -> IO ()
+printGoogleSignIn jsval = do
   Just obj <- fromJSVal jsval :: IO (Maybe AE.Value)
   putStrLn . BSL.unpack . AE.encode $ obj
 
@@ -28,8 +36,18 @@ foreign import javascript unsafe "onGoogleSignIn_ = $1"
 
 main :: IO ()
 main = do
-  setGoogleSignInCallback =<< syncCallback1 ContinueAsync processGoogleSignIn
   mainWidgetWithHead headEl $ do
+    postGui <- askPostGui
+    runWithActions <- askRunWithActions
+    (eSignIn, eSignInTriggerRef) <- newEventWithTriggerRef
+    let onSignIn :: JSVal -> IO ()
+        onSignIn val = postGui $ do
+          mt <- readRef eSignInTriggerRef
+          forM_ mt $ \t -> runWithActions [t :=> val]
+        setOnSignIn =
+          setGoogleSignInCallback =<< (syncCallback1 ContinueAsync onSignIn)
+    schedulePostBuild . liftIO $ setOnSignIn
+    performEvent_ (fmap (liftIO . printGoogleSignIn) eSignIn)
     elAttr "div" ("class" =: "g-signin2"
                   <> "data-onsuccess" =: "onGoogleSignIn_"
                   <> "data-theme" =: "dark") noContents

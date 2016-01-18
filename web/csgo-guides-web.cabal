@@ -79,7 +79,9 @@ executable csgo-guides-web
                      , servant
                      , ghcjs-servant-client
                      , ghcjs-base
-  
+                     , ref-tf
+                     , dependent-map
+
   -- Directories containing source files.
   hs-source-dirs:      src
   
