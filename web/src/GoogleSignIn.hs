@@ -10,11 +10,13 @@ import Reflex.Dom
 import Control.Monad
 import Control.Monad.IO.Class
 import Control.Monad.Ref
+import Control.Monad.Trans.Maybe
 import qualified Data.Aeson as AE
 import qualified Data.ByteString.Lazy.Char8 as BSL
 import Data.Dependent.Map (DSum(..))
 import qualified Data.JSString as JSS
 import Data.Monoid
+import qualified Data.Text as T
 import GHCJS.Foreign.Callback (Callback, syncCallback1, OnBlocked(..))
 import GHCJS.Marshal (fromJSVal)
 import GHCJS.Types (JSVal)
@@ -32,21 +34,32 @@ headEl = do
                   <> "async" =: "async"
                   <> "defer" =: "defer") noContents
 
-callbackEvent :: (MonadWidget t m) => m (Event t JSVal)
-callbackEvent = do
-    postGui <- askPostGui
-    runWithActions <- askRunWithActions
-    (eSignIn, eSignInTriggerRef) <- newEventWithTriggerRef
-    let onSignIn :: JSVal -> IO ()
-        onSignIn val = postGui $ do
-          mt <- readRef eSignInTriggerRef
-          forM_ mt $ \t -> runWithActions [t :=> val]
-        setOnSignIn =
-          setGoogleSignInCallback =<< (syncCallback1 ContinueAsync onSignIn)
-    schedulePostBuild . liftIO $ setOnSignIn
-    return eSignIn
+data GoogleToken = GoogleToken { googleIdToken :: T.Text } deriving (Eq, Show)
 
-foreign import javascript unsafe "onGoogleSignIn_ = $1"
+callbackEvent' :: (MonadWidget t m) => m (Event t (Maybe GoogleToken))
+callbackEvent' = do
+  postGui <- askPostGui
+  runWithActions <- askRunWithActions
+  (eSignIn, eSignInTriggerRef) <- newEventWithTriggerRef
+  let onSignIn :: JSVal -> IO ()
+      onSignIn jsval = postGui $ do
+        token <- runMaybeT . convertGoogleToken $ jsval
+        mt <- readRef eSignInTriggerRef
+        forM_ mt $ \t -> runWithActions [t :=> token]
+      setOnSignIn =
+        setGoogleSignInCallback =<< (syncCallback1 ContinueAsync onSignIn)
+  schedulePostBuild . liftIO $ setOnSignIn
+  return eSignIn
+
+callbackEvent :: (MonadWidget t m) => m (Event t GoogleToken)
+callbackEvent = fmap (fmapMaybe id) callbackEvent'
+
+convertGoogleToken :: (MonadIO m) => JSVal -> MaybeT m GoogleToken
+convertGoogleToken jsval = do
+  AE.String idToken <- MaybeT . liftIO $ (fromJSVal jsval :: IO (Maybe AE.Value))
+  return $ GoogleToken idToken
+
+foreign import javascript unsafe "onGoogleSignIn_ = function(x) { return $1(x.getAuthResponse().id_token); }"
   setGoogleSignInCallback :: Callback a -> IO ()
 
 signInButton :: (MonadWidget t m) => m ()
@@ -56,6 +69,6 @@ signInButton =
                 <> "data-theme" =: "dark") noContents
 
 printGoogleSignIn :: JSVal -> IO ()
-printGoogleSignIn jsval = do
-  Just obj <- fromJSVal jsval :: IO (Maybe AE.Value)
+printGoogleSignIn token = do
+  Just obj <- fromJSVal token :: IO (Maybe AE.Value)
   putStrLn . BSL.unpack . AE.encode $ obj

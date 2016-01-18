@@ -21,7 +21,7 @@ main :: IO ()
 main = do
   mainWidgetWithHead headEl $ do
     signIns <- GSI.callbackEvent
-    performEvent_ (fmap (liftIO . GSI.printGoogleSignIn) signIns)
+    performEvent_ (fmap (liftIO . print) signIns)
     GSI.signInButton
 
 css :: String
