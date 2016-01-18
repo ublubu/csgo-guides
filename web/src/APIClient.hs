@@ -13,7 +13,7 @@ import Servant.Client
 
 import API.SignIn
 
-signInApi :: Proxy SignInAPI
+signInApi :: Proxy ("api" :> SignInAPI)
 signInApi = Proxy
 
 tokensignin :: Maybe Text -> EitherT ServantError IO (SetCookied Text)

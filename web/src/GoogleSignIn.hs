@@ -34,25 +34,28 @@ headEl = do
                   <> "async" =: "async"
                   <> "defer" =: "defer") noContents
 
-data GoogleToken = GoogleToken { googleIdToken :: T.Text } deriving (Eq, Show)
+data GoogleToken = GoogleToken { _googleIdToken :: T.Text } deriving (Eq, Show)
 
-callbackEvent' :: (MonadWidget t m) => m (Event t (Maybe GoogleToken))
+callbackEvent' :: (MonadWidget t m) => m (Event t JSVal)
 callbackEvent' = do
   postGui <- askPostGui
   runWithActions <- askRunWithActions
   (eSignIn, eSignInTriggerRef) <- newEventWithTriggerRef
   let onSignIn :: JSVal -> IO ()
       onSignIn jsval = postGui $ do
-        token <- runMaybeT . convertGoogleToken $ jsval
         mt <- readRef eSignInTriggerRef
-        forM_ mt $ \t -> runWithActions [t :=> token]
+        forM_ mt $ \t -> runWithActions [t :=> jsval]
       setOnSignIn =
         setGoogleSignInCallback =<< (syncCallback1 ContinueAsync onSignIn)
   schedulePostBuild . liftIO $ setOnSignIn
   return eSignIn
 
 callbackEvent :: (MonadWidget t m) => m (Event t GoogleToken)
-callbackEvent = fmap (fmapMaybe id) callbackEvent'
+callbackEvent = do
+  jsval <- callbackEvent'
+  let actions = fmap (runMaybeT . convertGoogleToken) jsval
+  mtoken <- performEvent actions
+  return $ fmapMaybe id mtoken
 
 convertGoogleToken :: (MonadIO m) => JSVal -> MaybeT m GoogleToken
 convertGoogleToken jsval = do

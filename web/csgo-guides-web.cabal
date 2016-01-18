@@ -55,6 +55,7 @@ executable csgo-guides-web
                      , GoogleSignIn
                      , Layout
                      , NadeListWidget
+                     , SignIn
                      , Style
                      , Styles
                      , Utils

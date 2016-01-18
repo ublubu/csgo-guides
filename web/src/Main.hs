@@ -9,18 +9,18 @@ import Reflex.Dom
 import Control.Monad.IO.Class
 import Data.Monoid
 
-import APIClient
 import NadeListWidget (appWidget)
 import Style
 import qualified Styles as S
 import Utils
 
 import qualified GoogleSignIn as GSI
+import qualified SignIn as SI
 
 main :: IO ()
 main = do
   mainWidgetWithHead headEl $ do
-    signIns <- GSI.callbackEvent
+    signIns <- SI.signInEvent
     performEvent_ (fmap (liftIO . print) signIns)
     GSI.signInButton
 
