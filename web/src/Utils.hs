@@ -1,8 +1,11 @@
 module Utils where
 
-import Control.Monad
 import Reflex
 import Reflex.Dom
+
+import Control.Monad
+import qualified Data.Foldable as F
+import Data.Sequence (Seq)
 
 noContents :: (MonadWidget t m) => m ()
 noContents = return ()
@@ -21,3 +24,18 @@ dynWidgetEvents' f state = dynWidgetEvents =<< mapDyn f state
 
 eventJoin :: (MonadWidget t m) => Event t (Event t a) -> m (Event t a)
 eventJoin = (return . switchPromptlyDyn) <=< holdDyn never
+
+widgetFromEvent :: (MonadWidget t m) => m a -> (b -> m a) -> Event t b -> m (Event t a)
+widgetFromEvent init makeWidget evt =
+  dyn =<< holdDyn init (fmap makeWidget evt)
+
+seqLeftmost :: (Reflex t) => Seq (Event t a) -> Event t a
+seqLeftmost = leftmost . F.toList
+
+modEvent :: (Reflex t) => (a -> b) -> Dynamic t a -> Event t x -> Event t b
+modEvent f val trigger =
+  fmap f $ tagDyn val trigger
+
+modEvent' :: (Reflex t) => (a -> b) -> Dynamic t a -> Event t x -> Event t b
+modEvent' f val trigger =
+  fmap f $ tag (current val) trigger
