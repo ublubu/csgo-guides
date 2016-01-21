@@ -13,6 +13,8 @@ import qualified Data.Text as T
 
 import API.Nades
 
+import APIClient
+import APIForms
 import Forms
 
 emptyNade :: Nade'
@@ -27,3 +29,7 @@ nadeForm Nade'{..} = do
   tags <- simpleTextListForm _nadeTags
   mapDyn Nade' images >>= f title >>= f description >>= f tags
   where f = combineDyn (flip ($))
+
+postNadeForm :: (MonadWidget t m) => m (Event t Nade)
+postNadeForm =
+  postForm (flip postNade Nothing) (nadeForm emptyNade)

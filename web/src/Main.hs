@@ -21,14 +21,18 @@ import NadeForm
 import qualified GoogleSignIn as GSI
 import qualified SignIn as SI
 
+import Control.Monad.Trans.Either
+import APIClient (myNades)
+
 main :: IO ()
 main = do
+  print =<< runEitherT (myNades Nothing)
   mainWidgetWithHead headEl $ do
     signIns <- SI.signInEvent
     performEvent_ (fmap (liftIO . print) signIns)
     GSI.signInButton
-    nades <- nadeForm emptyNade
-    performEvent_ (fmap (liftIO . print) (updated nades))
+    nade <- postNadeForm
+    performEvent_ (fmap (liftIO . print) nade)
 
 css :: String
 css = toCssString $ body <> html
