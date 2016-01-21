@@ -27,8 +27,8 @@ main = do
     signIns <- SI.signInEvent
     performEvent_ (fmap (liftIO . print) signIns)
     GSI.signInButton
-    images <- imagesForm (M.fromList [(1, "asdf"), (2, "1234")])
-    performEvent_ (fmap (liftIO . print) (updated images))
+    nades <- nadeForm emptyNade
+    performEvent_ (fmap (liftIO . print) (updated nades))
 
 css :: String
 css = toCssString $ body <> html

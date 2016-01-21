@@ -2,6 +2,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Forms where
 
@@ -12,11 +13,12 @@ import Control.Monad
 import qualified Data.Foldable as F
 import Data.Map (Map)
 import qualified Data.Map as M
+import Data.Maybe
 import Data.Monoid
 import Data.Set (Set)
 import qualified Data.Set as SS
 import Data.Text (Text, unpack, pack)
-import qualified Data.Traversable as T
+import qualified Data.Text as T
 
 import Layout
 import Style
@@ -34,6 +36,10 @@ class (Ord k) => ListKey k where
 instance ListKey Int where
   nextKey = (+1)
   minKey = 0
+
+convertList :: (ListKey k) => [v] -> Map k v
+convertList = M.fromList . zip keys
+  where keys = iterate nextKey minKey
 
 nextListKey :: (ListKey k) => Map k v -> k
 nextListKey items
@@ -90,3 +96,23 @@ simpleListAppendButton emptyItem = do
 appendListItem :: (ListKey k) => v -> Map k v -> Map k v
 appendListItem item items =
   M.insert (nextListKey items) item items
+
+textForm :: (MonadWidget t m) => Text -> m (Dynamic t Text)
+textForm initVal = do
+  ti <- textInput def{
+    _textInputConfig_initialValue = unpack initVal
+    }
+  mapDyn pack $ _textInput_value ti
+
+maybeTextForm :: (MonadWidget t m) => Maybe Text -> m (Dynamic t (Maybe Text))
+maybeTextForm initVal =
+  mapDyn toMaybe =<< textForm initVal'
+  where initVal' = fromMaybe "" initVal
+        toMaybe x
+          | T.null x = Nothing
+          | otherwise = Just x
+
+simpleTextListForm :: (MonadWidget t m) => [Text] -> m (Dynamic t [Text])
+simpleTextListForm initVals =
+  mapDyn M.elems =<< listForm (simpleListAppendButton "") simpleTextListItem initVals'
+  where initVals' = convertList initVals :: Map Int Text
