@@ -4,6 +4,7 @@ import Reflex
 import Reflex.Dom
 
 import Control.Monad
+import Data.Either.Combinators
 import qualified Data.Foldable as F
 import Data.Sequence (Seq)
 
@@ -39,3 +40,10 @@ modEvent f val trigger =
 modEvent' :: (Reflex t) => (a -> b) -> Dynamic t a -> Event t x -> Event t b
 modEvent' f val trigger =
   fmap f $ tag (current val) trigger
+
+mapEither :: (b -> a) -> (c -> a) -> Either b c -> a
+mapEither f g = fromEither . mapBoth f g
+
+fromEither :: Either a a -> a
+fromEither (Left x) = x
+fromEither (Right x) = x

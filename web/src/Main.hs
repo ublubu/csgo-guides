@@ -8,8 +8,8 @@ import Reflex
 import Reflex.Dom
 
 import Control.Monad.IO.Class
+import qualified Data.Map as M
 import Data.Monoid
-import qualified Data.Sequence as SQ
 
 import NadeListWidget (appWidget)
 import Style
@@ -27,7 +27,7 @@ main = do
     signIns <- SI.signInEvent
     performEvent_ (fmap (liftIO . print) signIns)
     GSI.signInButton
-    images <- imagesForm (SQ.fromList ["asdf", "1234"])
+    images <- imagesForm (M.fromList [(1, "asdf"), (2, "1234")])
     performEvent_ (fmap (liftIO . print) (updated images))
 
 css :: String
