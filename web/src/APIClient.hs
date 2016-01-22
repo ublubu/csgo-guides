@@ -32,11 +32,23 @@ nadeApi :: Proxy ("api" :> NadeAPI)
 nadeApi = Proxy
 
 getNades :: ServIO [Nade]
-postNade :: Nade' -> Maybe Text -> ServIO Nade
+postNade' :: Nade' -> Maybe Text -> ServIO Nade
 getNade :: Int64 -> ServIO Nade
-putNade :: Int64 -> Nade' -> Maybe Text -> ServIO Nade
-deleteNade :: Int64 -> Maybe Text -> ServIO ()
-myNades :: Maybe Text -> ServIO [Nade]
+putNade' :: Int64 -> Nade' -> Maybe Text -> ServIO Nade
+deleteNade' :: Int64 -> Maybe Text -> ServIO ()
+myNades' :: Maybe Text -> ServIO [Nade]
 
-getNades :<|> postNade :<|> getNade :<|> putNade :<|> deleteNade :<|> myNades =
+getNades :<|> postNade' :<|> getNade :<|> putNade' :<|> deleteNade' :<|> myNades' =
   client nadeApi baseUrl
+
+postNade :: Nade' -> ServIO Nade
+postNade = flip postNade' Nothing
+
+putNade :: Int64 -> Nade' -> ServIO Nade
+putNade k v = putNade' k v Nothing
+
+deleteNade :: Int64 -> ServIO ()
+deleteNade = flip deleteNade' Nothing
+
+myNades :: ServIO [Nade]
+myNades = myNades' Nothing

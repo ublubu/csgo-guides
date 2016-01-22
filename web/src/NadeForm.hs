@@ -33,13 +33,16 @@ nadeForm Nade'{..} = do
 
 postNadeForm :: (MonadWidget t m) => m (Event t Nade)
 postNadeForm =
-  simpleApiForm (flip postNade Nothing) (nadeForm emptyNade)
+  simpleApiForm postNade (nadeForm emptyNade)
 
 convertNade :: Nade -> (Int64, Nade')
 convertNade n = (_dbFilledKey n, _dbFilledContents n)
 
 createEditNadeForm :: (MonadWidget t m) => m (Event t (Either () Nade))
 createEditNadeForm =
-  createEditForm (flip postNade Nothing) (nadeForm emptyNade)
-  convertNade (\k v -> putNade k v Nothing) nadeForm
-  (\k -> deleteNade k Nothing)
+  createEditForm postNade (nadeForm emptyNade)
+  convertNade putNade nadeForm deleteNade
+
+editNadeForm :: (MonadWidget t m) => Nade -> m (Event t (Either () Nade))
+editNadeForm =
+  editForm convertNade putNade nadeForm deleteNade
