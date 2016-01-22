@@ -1,3 +1,5 @@
+{-# LANGUAGE RecursiveDo #-}
+
 module Utils where
 
 import Reflex
@@ -29,6 +31,20 @@ eventJoin = (return . switchPromptlyDyn) <=< holdDyn never
 widgetFromEvent :: (MonadWidget t m) => m a -> (b -> m a) -> Event t b -> m (Event t a)
 widgetFromEvent init makeWidget evt =
   dyn =<< holdDyn init (fmap makeWidget evt)
+
+untilFirstEvent :: (MonadWidget t m) => m (Event t a) -> m (Event t a)
+untilFirstEvent init = mdo
+  evt <- eventJoin =<< dyn =<< holdDyn init (fmap (const $ return never) evt)
+  return evt
+
+afterFirstEvent :: (MonadWidget t m) => m b -> (a -> m b) -> Event t a -> m (Event t b)
+afterFirstEvent init makeWidget evt =
+  dyn =<< holdDyn init (fmap makeWidget evt)
+
+widgetSequence :: (MonadWidget t m) => m (Event t a) -> (a -> m (Event t b)) -> m (Event t b)
+widgetSequence init after = do
+  evt <- untilFirstEvent init
+  eventJoin =<< afterFirstEvent (return never) after evt
 
 seqLeftmost :: (Reflex t) => Seq (Event t a) -> Event t a
 seqLeftmost = leftmost . F.toList

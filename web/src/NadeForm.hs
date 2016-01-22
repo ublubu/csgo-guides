@@ -6,6 +6,7 @@ module NadeForm where
 import Reflex
 import Reflex.Dom
 
+import Data.Int
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Text (Text)
@@ -32,4 +33,13 @@ nadeForm Nade'{..} = do
 
 postNadeForm :: (MonadWidget t m) => m (Event t Nade)
 postNadeForm =
-  postForm (flip postNade Nothing) (nadeForm emptyNade)
+  simpleApiForm (flip postNade Nothing) (nadeForm emptyNade)
+
+convertNade :: Nade -> (Int64, Nade')
+convertNade n = (_dbFilledKey n, _dbFilledContents n)
+
+createEditNadeForm :: (MonadWidget t m) => m (Event t (Either () Nade))
+createEditNadeForm =
+  createEditForm (flip postNade Nothing) (nadeForm emptyNade)
+  convertNade (\k v -> putNade k v Nothing) nadeForm
+  (\k -> deleteNade k Nothing)
