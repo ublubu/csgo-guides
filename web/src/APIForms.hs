@@ -1,4 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE RecursiveDo #-}
 
 module APIForms where
 
@@ -8,6 +9,7 @@ import Reflex.Dom
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Either
 import Data.Either.Combinators
+import Data.Map (Map)
 import qualified Data.Map as M
 
 import APIClient
@@ -58,8 +60,32 @@ listItemForm :: (MonadWidget t m, Ord i)
              -> (k -> ServIO c)
              -> ListItemControl i t b m
 listItemForm convert put form delete listKey dVal = do
-  --formEvents <- dynEditForm convert put form delete dVal
   formEvents <- dynWidgetEvents' (editForm convert put form delete) dVal
   return $ fmap f formEvents
   where f (Left _) = M.delete listKey
         f (Right val) = M.insert listKey val
+
+addListItemForm :: (MonadWidget t m, ListKey i)
+                => (a -> ServIO b)
+                -> m (Dynamic t a)
+                -> ListControl i t b m
+addListItemForm post postForm = mdo
+  formEvents <- dynWidgetEvents' (const $ simpleApiForm post postForm) postDyn
+  postDyn <- holdDyn () (fmap (const ()) formEvents)
+  return $ fmap f formEvents
+  where f x = appendListItem x
+
+simpleApiListForm :: forall a0 a1 b c k t m . (MonadWidget t m)
+               => (a0 -> ServIO b)
+               -> m (Dynamic t a0)
+               -> (b -> (k, a1))
+               -> (k -> a1 -> ServIO b)
+               -> (a1 -> m (Dynamic t a1))
+               -> (k -> ServIO c)
+               -> [b]
+               -> m (Dynamic t [b])
+simpleApiListForm post postForm convert put putForm delete initVals =
+  mapDyn M.elems =<< listForm listControl listItem initVals'
+  where listControl = addListItemForm post postForm
+        listItem = listItemForm convert put putForm delete
+        initVals' = convertList initVals :: Map Int b

@@ -31,8 +31,8 @@ main = do
     signIns <- SI.signInEvent
     performEvent_ (fmap (liftIO . print) signIns)
     GSI.signInButton
-    nade <- createEditNadeForm
-    performEvent_ (fmap (liftIO . print) nade)
+    nades <- myNadesForm
+    performEvent_ (fmap (liftIO . print) (updated nades))
 
 css :: String
 css = toCssString $ body <> html

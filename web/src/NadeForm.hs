@@ -17,6 +17,7 @@ import API.Nades
 import APIClient
 import APIForms
 import Forms
+import Utils
 
 emptyNade :: Nade'
 emptyNade =
@@ -46,3 +47,15 @@ createEditNadeForm =
 editNadeForm :: (MonadWidget t m) => Nade -> m (Event t (Either () Nade))
 editNadeForm =
   editForm convertNade putNade nadeForm deleteNade
+
+nadesForm :: (MonadWidget t m) => [Nade] -> m (Dynamic t [Nade])
+nadesForm =
+  simpleApiListForm postNade (nadeForm emptyNade)
+  convertNade putNade nadeForm deleteNade
+
+myNadesForm :: (MonadWidget t m) => m (Dynamic t [Nade])
+myNadesForm = do
+  pb <- getPostBuild
+  nades <- apiEvent (const myNades) pb
+  nadesDynDyn <- holdDyn (return $ constDyn []) (fmap nadesForm nades)
+  dynWidgetDyn [] nadesDynDyn
