@@ -1,3 +1,5 @@
+{-# LANGUAGE ScopedTypeVariables #-}
+
 module APIForms where
 
 import Reflex
@@ -6,8 +8,10 @@ import Reflex.Dom
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Either
 import Data.Either.Combinators
+import qualified Data.Map as M
 
 import APIClient
+import Forms
 import Utils
 
 simpleApiForm :: (MonadWidget t m) => (a -> ServIO b) -> m (Dynamic t a) -> m (Event t b)
@@ -46,3 +50,16 @@ apiEvent fetch evts = do
   responses <- performEvent (fmap doFetch evts)
   return $ fmapMaybe rightToMaybe responses
   where doFetch = liftIO . runEitherT . fetch
+
+listItemForm :: (MonadWidget t m, Ord i)
+             => (b -> (k, a))
+             -> (k -> a -> ServIO b)
+             -> (a -> m (Dynamic t a))
+             -> (k -> ServIO c)
+             -> ListItemControl i t b m
+listItemForm convert put form delete listKey dVal = do
+  --formEvents <- dynEditForm convert put form delete dVal
+  formEvents <- dynWidgetEvents' (editForm convert put form delete) dVal
+  return $ fmap f formEvents
+  where f (Left _) = M.delete listKey
+        f (Right val) = M.insert listKey val
