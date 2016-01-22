@@ -25,7 +25,7 @@ createEditForm :: (MonadWidget t m)
                -> (k -> ServIO c)
                -> m (Event t (Either c b))
 createEditForm post postForm convert put putForm delete =
-  widgetSequence (simpleApiForm post postForm) (editForm convert put putForm delete)
+  widgetSequence' Right (simpleApiForm post postForm) (editForm convert put putForm delete)
 
 editForm :: (MonadWidget t m)
          => (b -> (k, a))

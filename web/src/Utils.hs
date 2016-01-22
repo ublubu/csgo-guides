@@ -41,10 +41,16 @@ afterFirstEvent :: (MonadWidget t m) => m b -> (a -> m b) -> Event t a -> m (Eve
 afterFirstEvent init makeWidget evt =
   dyn =<< holdDyn init (fmap makeWidget evt)
 
-widgetSequence :: (MonadWidget t m) => m (Event t a) -> (a -> m (Event t b)) -> m (Event t b)
+widgetSequence' :: (MonadWidget t m) => (a -> b) -> m (Event t a) -> (a -> m (Event t b)) -> m (Event t b)
+widgetSequence' convert init after = do
+  (evt, evt') <- widgetSequence init after
+  return $ leftmost [fmap convert evt, evt']
+
+widgetSequence :: (MonadWidget t m) => m (Event t a) -> (a -> m (Event t b)) -> m (Event t a, Event t b)
 widgetSequence init after = do
   evt <- untilFirstEvent init
-  eventJoin =<< afterFirstEvent (return never) after evt
+  evt' <- eventJoin =<< afterFirstEvent (return never) after evt
+  return (evt, evt')
 
 seqLeftmost :: (Reflex t) => Seq (Event t a) -> Event t a
 seqLeftmost = leftmost . F.toList
