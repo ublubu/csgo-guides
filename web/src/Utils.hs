@@ -25,8 +25,17 @@ dynWidgetEvents = fmap switchPromptlyDyn . (holdDyn never =<<) . dyn
 dynWidgetEvents' :: (MonadWidget t m) => (a -> m (Event t b)) -> Dynamic t a -> m (Event t b)
 dynWidgetEvents' f state = dynWidgetEvents =<< mapDyn f state
 
+dynWidgetEvents'' :: (MonadWidget t m) => Dynamic t (m (Dynamic t a)) -> m (Event t a)
+dynWidgetEvents'' = fmap updated . dynWidgetDyn undefined
+
+dynWidgetEvents''' :: (MonadWidget t m) => (a -> m (Dynamic t b)) -> Dynamic t a -> m (Event t b)
+dynWidgetEvents''' f state = dynWidgetEvents'' =<< mapDyn f state
+
 eventJoin :: (MonadWidget t m) => Event t (Event t a) -> m (Event t a)
 eventJoin = (return . switchPromptlyDyn) <=< holdDyn never
+
+eventDynJoin :: (MonadWidget t m) => Event t (Dynamic t a) -> m (Event t a)
+eventDynJoin = fmap (updated . joinDyn) . holdDyn (constDyn undefined)
 
 widgetFromEvent :: (MonadWidget t m) => m a -> (b -> m a) -> Event t b -> m (Event t a)
 widgetFromEvent init makeWidget evt =
@@ -69,3 +78,38 @@ mapEither f g = fromEither . mapBoth f g
 fromEither :: Either a a -> a
 fromEither (Left x) = x
 fromEither (Right x) = x
+
+dap :: (MonadWidget t m) => m (Dynamic t (a -> b)) -> Dynamic t a -> m (Dynamic t b)
+f `dap` x = f >>= combineDyn (flip ($)) x
+
+dwhen :: (MonadWidget t m) => Dynamic t Bool -> m (Event t a) -> m (Event t a)
+dwhen test widget =
+  dynWidgetEvents' (\t -> if t then widget else return never) test
+
+ewhen :: (MonadWidget t m) => Event t a -> m (Event t b) -> m (Event t b)
+ewhen test widget = do
+  test' <- holdDyn False (fmap (const True) test)
+  dwhen test' widget
+
+dwhen' :: (MonadWidget t m) => Dynamic t Bool -> m (Dynamic t a) -> m (Event t a)
+dwhen' test widget = do
+  let widget' = mapDyn Just =<< widget
+  evts <- dynWidgetEvents''' (\t -> if t then widget' else return $ constDyn Nothing) test
+  return $ fmapMaybe id evts
+
+ewhen' :: (MonadWidget t m) => Event t a -> m (Dynamic t b) -> m (Event t b)
+ewhen' test widget = do
+  test' <- holdDyn False (fmap (const True) test)
+  dwhen' test' widget
+
+dif1 :: (MonadWidget t m) => Dynamic t Bool -> m (Event t a) -> m (Event t b) -> m (Event t a, Event t b)
+dif1 test true false = do
+  et <- dwhen test true
+  test' <- mapDyn not test
+  ef <- dwhen test' false
+  return (et, ef)
+
+dif0 :: (MonadWidget t m) => Dynamic t Bool -> m (Event t a) -> m (Event t a) -> m (Event t a)
+dif0 test true false = do
+  (et, ef) <- dif1 test true false
+  return $ leftmost [et, ef]

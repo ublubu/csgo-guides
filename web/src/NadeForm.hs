@@ -29,8 +29,7 @@ nadeForm Nade'{..} = do
   title <- textForm _nadeTitle
   description <- maybeTextForm _nadeDescription
   tags <- simpleTextListForm _nadeTags
-  mapDyn Nade' images >>= f title >>= f description >>= f tags
-  where f = combineDyn (flip ($))
+  mapDyn Nade' images `dap` title `dap` description `dap` tags
 
 postNadeForm :: (MonadWidget t m) => m (Event t Nade)
 postNadeForm =
