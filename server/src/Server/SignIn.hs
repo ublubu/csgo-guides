@@ -33,7 +33,7 @@ signInServer :: ServerT SignInAPI App
 signInServer =
   tokensignin :<|> cookiedata
 
-  where tokensignin :: Maybe Text -> App (SetCookied Text)
+  where tokensignin :: Maybe Text -> App (SetCookied CookieData)
         tokensignin token = case token of
           Nothing -> throwError $ Invalid "missing token in queryparams"
           Just t -> askGoogle t
@@ -62,8 +62,11 @@ wrapCookie cookie = cookiePrefix <> cookie
 unwrapCookie :: Text -> Text
 unwrapCookie = T.drop (T.length cookiePrefix)
 
+getCookieData' :: GoogleTokenInfo -> CookieData
+getCookieData' = CookieData . _googleTokenSub
+
 getCookieData :: GoogleTokenInfo -> App CookieData
-getCookieData = return . CookieData . _googleTokenSub
+getCookieData = return . getCookieData'
 
 encryptCookie :: CookieData -> App Text
 encryptCookie cookie = do
@@ -79,13 +82,14 @@ decryptCookie cookieText = do
   cookie <- maybe (throwError $ Invalid "couldn't decrypt cookie") return (decrypt key cookieBytes)
   maybe (throwError $ Invalid "couldn't parse cookie") return . decodeStrict' $ cookie
 
-askGoogle :: Text -> App (SetCookied Text)
+askGoogle :: Text -> App (SetCookied CookieData)
 askGoogle token = do
   request <- liftIO $ H.parseUrl "https://www.googleapis.com/oauth2/v3/tokeninfo"
   let r = H.setQueryString [("id_token", Just $ T.encodeUtf8 token)] request
   tokenInfo <- H.withResponse r processGoogleResponse
-  cookie <- encryptCookie =<< getCookieData tokenInfo
-  return $ addHeader (wrapCookie cookie) (_googleTokenSub tokenInfo)
+  cookieData <- getCookieData tokenInfo
+  cookie <- encryptCookie cookieData
+  return $ addHeader (wrapCookie cookie) cookieData
 
 processGoogleResponse :: H.Response (ConduitM () BS.ByteString App ()) -> App GoogleTokenInfo
 processGoogleResponse res = do

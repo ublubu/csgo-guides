@@ -26,7 +26,6 @@ import APIClient (myNades)
 
 main :: IO ()
 main = do
-  print =<< runEitherT myNades
   mainWidgetWithHead headEl $ do
     signIns <- SI.signInEvent
     performEvent_ (fmap (liftIO . print) signIns)

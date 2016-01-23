@@ -23,10 +23,13 @@ baseUrl = (Just $ BaseUrl Http "localhost" 8081)
 signInApi :: Proxy ("api" :> SignInAPI)
 signInApi = Proxy
 
-tokensignin :: Maybe Text -> ServIO (SetCookied Text)
-idtoken :: Maybe Text -> ServIO CookieData
+tokensignin :: Maybe Text -> ServIO (SetCookied CookieData)
+cookiedata' :: Maybe Text -> ServIO CookieData
 
-tokensignin :<|> idtoken = client signInApi baseUrl
+cookiedata :: ServIO CookieData
+cookiedata = cookiedata' Nothing
+
+tokensignin :<|> cookiedata' = client signInApi baseUrl
 
 nadeApi :: Proxy ("api" :> NadeAPI)
 nadeApi = Proxy

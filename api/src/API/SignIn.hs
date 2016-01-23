@@ -19,5 +19,5 @@ instance ToJSON CookieData
 
 type SetCookied a = Headers '[Header "Set-Cookie" Text] a
 type Cookied = Header "Cookie" Text
-type SignInAPI = "tokensignin" :> QueryParam "idtoken" Text :> Get '[JSON] (SetCookied Text)
+type SignInAPI = "tokensignin" :> QueryParam "idtoken" Text :> Get '[JSON] (SetCookied CookieData)
                  :<|> "cookiedata" :> Cookied :> Get '[JSON] CookieData
