@@ -16,6 +16,7 @@ import GHC.Generics
 import Servant.API
 
 import API.SignIn
+import Parsing.ImageSrc (isImgurSrc)
 
 data Authored a = Authored { _authoredAuthor :: Text
                            , _authoredContents :: a
@@ -100,7 +101,4 @@ withSanitizedNade f nade =
   f (Sanitized $ over nadeImages sanitizeImages nade)
 
 sanitizeImages :: [Text] -> [Text]
-sanitizeImages imgs = filter isSafeImage imgs
-
-isSafeImage :: Text -> Bool
-isSafeImage = ("http://i.imgur.com/" `isPrefixOf`)
+sanitizeImages = filter isImgurSrc

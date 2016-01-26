@@ -50,6 +50,7 @@ library
   -- Modules exported by the library.
   exposed-modules:     API.SignIn
                      , API.Nades
+                     , Parsing.ImageSrc
   
   -- Modules included in this library but not exported.
   -- other-modules:       
@@ -61,6 +62,7 @@ library
   build-depends:       aeson
                      , base >=4.8 && <4.9
                      , lens
+                     , parsec
                      , servant
                      , text
   
