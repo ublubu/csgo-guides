@@ -82,15 +82,6 @@ fromEither (Right x) = x
 dap :: (MonadWidget t m) => m (Dynamic t (a -> b)) -> Dynamic t a -> m (Dynamic t b)
 f `dap` x = f >>= combineDyn (flip ($)) x
 
-dwhen :: (MonadWidget t m) => Dynamic t Bool -> m (Event t a) -> m (Event t a)
-dwhen test widget =
-  dynWidgetEvents' (\t -> if t then widget else return never) test
-
-ewhen :: (MonadWidget t m) => Event t a -> m (Event t b) -> m (Event t b)
-ewhen test widget = do
-  test' <- holdDyn False (fmap (const True) test)
-  dwhen test' widget
-
 dwhen' :: (MonadWidget t m) => Dynamic t Bool -> m (Dynamic t a) -> m (Event t a)
 dwhen' test widget = do
   let widget' = mapDyn Just =<< widget
@@ -101,15 +92,3 @@ ewhen' :: (MonadWidget t m) => Event t a -> m (Dynamic t b) -> m (Event t b)
 ewhen' test widget = do
   test' <- holdDyn False (fmap (const True) test)
   dwhen' test' widget
-
-dif1 :: (MonadWidget t m) => Dynamic t Bool -> m (Event t a) -> m (Event t b) -> m (Event t a, Event t b)
-dif1 test true false = do
-  et <- dwhen test true
-  test' <- mapDyn not test
-  ef <- dwhen test' false
-  return (et, ef)
-
-dif0 :: (MonadWidget t m) => Dynamic t Bool -> m (Event t a) -> m (Event t a) -> m (Event t a)
-dif0 test true false = do
-  (et, ef) <- dif1 test true false
-  return $ leftmost [et, ef]

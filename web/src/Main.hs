@@ -7,11 +7,12 @@ module Main where
 import Reflex
 import Reflex.Dom
 
+import Control.Applicative
 import Control.Monad.IO.Class
 import qualified Data.Map as M
 import Data.Monoid
 
-import NadeListWidget (appWidget)
+import NadeListWidget (nadesViewer)
 import Style
 import qualified Styles as S
 import Utils
@@ -21,8 +22,9 @@ import NadeForm
 import qualified GoogleSignIn as GSI
 import qualified SignIn as SI
 
-import Control.Monad.Trans.Either
-import APIClient (myNades)
+import Combinators
+import CommonWidgets
+import Utils
 
 main :: IO ()
 main = do
@@ -30,7 +32,9 @@ main = do
     signIns <- SI.signInEvent
     performEvent_ (fmap (liftIO . print) signIns)
     GSI.signInButton
-    nades <- ewhen' signIns myNadesForm
+    editMode <- toggleButton False "Edit" "View"
+    (nades, _) <- ewhen signIns $ do
+      dif editMode (updated <$> myNadesForm) (return ())
     performEvent_ (fmap (liftIO . print) nades)
 
 css :: String
