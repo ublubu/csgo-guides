@@ -46,7 +46,7 @@ nadeToDb' author Nade'{..} =
 nadeServer :: ServerT NadeAPI App
 nadeServer =
   getNades
-  :<|> postNade :<|> getNade :<|> putNade :<|> deleteNade
+  :<|> withSanitizedNade postNade :<|> getNade :<|> flip (withSanitizedNade putNade) :<|> deleteNade
   :<|> withCookieText myNades
 
 getNades :: App [Nade]
@@ -69,8 +69,8 @@ getNade key = do
   case nade of Nothing -> throwWrapped err404
                Just n -> return . nadeFromDb' key $ n
 
-postNade :: Nade' -> Maybe Text -> App Nade
-postNade nade =
+postNade :: Sanitized Nade' -> Maybe Text -> App Nade
+postNade (Sanitized nade) =
   withCookieText
   (\(CookieData{..}) -> do
       key <- runDb . insert . nadeToDb' _cookieDataUserId $ nade
@@ -78,8 +78,8 @@ postNade nade =
   )
 
 -- TODO: check author using SQL query
-putNade :: Int64 -> Nade' -> Maybe Text -> App Nade
-putNade key nade =
+putNade :: Sanitized Nade' -> Int64 -> Maybe Text -> App Nade
+putNade (Sanitized nade) key =
   withCookieText
   (\(CookieData{..}) -> do
       oldNade <- getNade key

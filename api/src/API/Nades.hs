@@ -3,13 +3,15 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module API.Nades where
 
+import Control.Lens
 import Control.Monad
 import Data.Aeson
 import Data.Int
-import Data.Text (Text)
+import Data.Text (Text, isPrefixOf)
 import GHC.Generics
 import Servant.API
 
@@ -18,10 +20,12 @@ import API.SignIn
 data Authored a = Authored { _authoredAuthor :: Text
                            , _authoredContents :: a
                            } deriving (Show, Eq, Generic)
+makeLenses ''Authored
 
 data Keyed a = Keyed { _keyedKey :: Int64
                      , _keyedContents :: a
                      } deriving (Show, Eq, Generic)
+makeLenses ''Keyed
 
 -- all fields (key & author) filled and ready for DB interaction
 type DbFilled a = Authored (Keyed a)
@@ -31,6 +35,7 @@ data Nade' = Nade' { _nadeImages :: [Text]
                    , _nadeDescription :: Maybe Text
                    , _nadeTags :: [Text]
                    } deriving (Show, Eq, Generic)
+makeLenses ''Nade'
 
 type Nade = DbFilled Nade'
 
@@ -38,6 +43,7 @@ data NadeList'' a = NadeList'' { _nadeListTitle :: Text
                                , _nadeListDescription :: Maybe Text
                                , _nadeListNades :: [a]
                                } deriving (Show, Eq, Generic)
+makeLenses ''NadeList''
 
 type NadeList = DbFilled (NadeList'' Nade)
 type NadeList' = NadeList'' Int64
@@ -84,3 +90,17 @@ _dbFilledKey = _keyedKey . _authoredContents
 
 _dbFilledAuthor :: DbFilled a -> Text
 _dbFilledAuthor = _authoredAuthor
+
+data Sanitized a = Sanitized { _sanitizedValue :: a
+                             } deriving (Show, Eq)
+makeLenses ''Sanitized
+
+withSanitizedNade :: (Sanitized Nade' -> a) -> Nade' -> a
+withSanitizedNade f nade =
+  f (Sanitized $ over nadeImages sanitizeImages nade)
+
+sanitizeImages :: [Text] -> [Text]
+sanitizeImages imgs = filter isSafeImage imgs
+
+isSafeImage :: Text -> Bool
+isSafeImage = ("http://i.imgur.com/" `isPrefixOf`)
