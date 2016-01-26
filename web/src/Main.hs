@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE TypeFamilies #-}
 
@@ -22,20 +23,24 @@ import NadeForm
 import qualified GoogleSignIn as GSI
 import qualified SignIn as SI
 
+import API.Nades
 import Combinators
 import CommonWidgets
 import Utils
 
 main :: IO ()
 main = do
-  mainWidgetWithHead headEl $ do
+  mainWidgetWithHead headEl $ mdo
     signIns <- SI.signInEvent
     performEvent_ (fmap (liftIO . print) signIns)
     GSI.signInButton
-    editMode <- toggleButton False "Edit" "View"
+    editMode <- toggleButton True "Edit" "View"
     (nades, _) <- ewhen signIns $ do
-      dif editMode (updated <$> myNadesForm) (return ())
-    performEvent_ (fmap (liftIO . print) nades)
+      nades' <- holdDyn [] $ fmap (fmap _dbFilledContents) nades
+      let editor = updated <$> myNadesForm
+          viewer = ecDyn' nadesViewer nades'
+      dif editMode editor viewer
+    return ()
 
 css :: String
 css = toCssString $ body <> html

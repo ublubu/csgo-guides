@@ -24,12 +24,12 @@ import Utils
 
 nadesViewer :: (MonadWidget t m) => [Nade'] -> m ()
 nadesViewer nades = do
+  pb <- getPostBuild
   let allTags = (mconcat . fmap (Set.fromList . _nadeTags)) nades
   checkedTags <- nadeTagSelector allTags
   selectedNades <- mapDyn (flip filterByTag nades) checkedTags
   nadeWidgets <- mapDyn (mapM nadeInfoWidget) selectedNades
   nadeImgClicks <- eventJoin =<< (fmap (fmap leftmost) . dyn $ nadeWidgets)
-  performEvent_ $ fmap (\img -> liftIO $ print img) nadeImgClicks
   nadeOverlayWidget nadeImgClicks
 
 filterByTag :: Set.Set Text -> [Nade'] -> [Nade']
