@@ -35,11 +35,11 @@ main = do
     performEvent_ (fmap (liftIO . print) signIns)
     GSI.signInButton
     editMode <- toggleButton True "Edit" "View"
-    (nades, _) <- ewhen signIns $ do
+    (nades, _) <- eWhen signIns $ do
       nades' <- holdDyn [] $ fmap (fmap _dbFilledContents) nades
       let editor = updated <$> myNadesForm
           viewer = ecDyn' nadesViewer nades'
-      dif editMode editor viewer
+      dIf editMode editor viewer
     return ()
 
 css :: String

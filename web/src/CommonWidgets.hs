@@ -13,6 +13,6 @@ toggleButton initVal makeTrue makeFalse = mdo
   let tagButton v = fmap . fmap $ const v
       makeTrueButton = tagButton True $ button makeTrue
       makeFalseButton = tagButton False $ button makeFalse
-  toggleEvents <- dif' val makeFalseButton makeTrueButton
+  toggleEvents <- dIf' val makeFalseButton makeTrueButton
   val <- holdDyn initVal toggleEvents
   return val

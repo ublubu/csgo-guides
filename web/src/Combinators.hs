@@ -1,11 +1,14 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Combinators where
 
 import Reflex
 import Reflex.Dom
 
+import Control.Lens
 import Control.Monad
 
 {-
@@ -31,25 +34,25 @@ class (MonadWidget t m) => EventContainer t m a where
 
   ecLeftmost :: [a] -> m a
 
-dwhen :: (EventContainer t m a) => Dynamic t Bool -> m a -> m a
-dwhen test widget =
+dWhen :: (EventContainer t m a) => Dynamic t Bool -> m a -> m a
+dWhen test widget =
   ecDyn' (\t -> if t then widget else ecNever) test
 
-ewhen :: (EventContainer t m a) => Event t b -> m a -> m a
-ewhen test widget = do
+eWhen :: (EventContainer t m a) => Event t b -> m a -> m a
+eWhen test widget = do
   test' <- holdDyn False (fmap (const True) test)
-  dwhen test' widget
+  dWhen test' widget
 
-dif :: (EventContainer t m a, EventContainer t m b) => Dynamic t Bool -> m a -> m b -> m (a, b)
-dif test true false = do
-  trues <- dwhen test true
+dIf :: (EventContainer t m a, EventContainer t m b) => Dynamic t Bool -> m a -> m b -> m (a, b)
+dIf test true false = do
+  trues <- dWhen test true
   notTest <- mapDyn not test
-  falses <- dwhen notTest false
+  falses <- dWhen notTest false
   return (trues, falses)
 
-dif' :: (EventContainer t m a) => Dynamic t Bool -> m a -> m a -> m a
-dif' test true false = do
-  (trues, falses) <- dif test true false
+dIf' :: (EventContainer t m a) => Dynamic t Bool -> m a -> m a -> m a
+dIf' test true false = do
+  (trues, falses) <- dIf test true false
   ecLeftmost [trues, falses]
 
 instance (MonadWidget t m) => EventContainer t m () where
@@ -66,3 +69,35 @@ instance (EventContainer t m a, EventContainer t m b) => EventContainer t m (a, 
 
 ecTuple2 :: (EventContainer t m a, EventContainer t m b, Functor f) => (f a -> m a) -> (f b -> m b) -> f (a, b) -> m (a, b)
 ecTuple2 f g eventPairs = (,) <$> (ecExtractWith f) fst eventPairs <*> (ecExtractWith g) snd eventPairs
+
+instance (EventContainer t m a) => EventContainer t m (Routing t r a) where
+  ecJoin = ecRouting ecJoin ecJoin
+  ecLeftmost = ecRouting ecLeftmost ecLeftmost
+
+ecRouting :: (EventContainer t m a, Functor f) => (f (Event t r) -> m (Event t r)) -> (f a -> m a) -> f (Routing t r a) -> m (Routing t r a)
+ecRouting f g routings = Routing <$> (ecExtractWith f) _rRoutes routings <*> (ecExtractWith g) _rContents routings
+
+eCombine :: (Reflex t) => Event t a -> Event t a -> Event t a
+eCombine a b = leftmost [a, b]
+
+data Routing t r a = Routing { _rRoutes :: Event t r
+                             , _rContents :: a
+                             }
+makeLenses ''Routing
+
+rJoin :: (Reflex t) => Routing t r (Routing t r a) -> Routing t r a
+rJoin (Routing r1 (Routing r2 a)) = Routing (r1 `eCombine` r2) a
+
+class (Reflex t) => RoutingContainer t r c where
+  type RContents c :: *
+  rcFactor :: c -> Routing t r (RContents c)
+
+instance (Reflex t) => RoutingContainer t r (Routing t r a, Routing t r b) where
+  type RContents (Routing t r a, Routing t r b) = (a, b)
+  rcFactor (ra, rb) = Routing (view rRoutes ra `eCombine` view rRoutes rb) (ra ^. rContents, rb ^. rContents)
+
+rdIf :: (EventContainer t m a, EventContainer t m b) => Dynamic t Bool -> m (Routing t r a) -> m (Routing t r b) -> m (Routing t r (a, b))
+rdIf test true false = fmap rcFactor $ dIf test true false
+
+neverRouting :: (Reflex t) => a -> Routing t r a
+neverRouting = Routing never
